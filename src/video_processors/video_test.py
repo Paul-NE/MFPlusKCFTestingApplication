@@ -17,7 +17,7 @@ class VideoTest:
         cv_window: str
         image: np.ndarray
         
-    def __init__(self, video, operation: Callable[[Message], bool], options: Options = None):
+    def __init__(self, video: cv2.VideoCapture, operation: Callable[[Message], bool], options: Options = None):
         self._logger = logging.getLogger(f"{self.__class__.__name__}")
         self._video_path = video 
         self._operation = operation

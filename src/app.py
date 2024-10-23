@@ -21,52 +21,11 @@ from generators.grid_pts_generator import GridPtsGenerator
 from generators.pts_generator import PtsGenerator
 from video_processors.webm_video_writer import WebmVideoWriter
 from video_processors.video_test import VideoTest
-from video_processors.frame_process_skipable_scale_only import FrameProcessorSkipable
 from video_processors.process_universal import FrameProcessorUni
 from trackers.kcf.kcf import *
 
 
 def main(test_folder_path: Path, _):
-    _annotation_path = test_folder_path / config._annotation_name
-    video_path = test_folder_path / config._video_name
-    video_test_options = VideoTest.Options()
-    _frame_process_options = FrameProcessorSkipable.Options(skip_first_n_frames=60)
-
-    _annotation = NullableAnnotation(_annotation_path)
-    _video_writer = WebmVideoWriter(config._test_results_write_path)
-    _analytics_engine = IOUs()
-    _marker = ImageMarks()
-
-    pts_gener = SmartGridPtsGenerator(config._points_density)
-    fb_flow_generator = ForwardBachkwardFlow(config._flow_generator)
-    fb_filter = ForwardBackwardPntFilter(config._max_forward_backward_error)
-
-    _tracker = MFScaler(
-            pts_gener,
-            fb_filter,
-            fb_flow_generator
-        )
-
-    operation = FrameProcessorSkipable(
-            annotation=_annotation, 
-            tracker=_tracker,
-            analytics_engine=_analytics_engine,
-            video_writer=_video_writer,
-            marker=_marker,
-            options=_frame_process_options
-        )
-    oper = operation
-    
-    VideoTest(
-        video=video_path, 
-        operation=oper,
-        options=video_test_options
-    ).run()
-    
-    print(_analytics_engine.avarage)
-
-
-def universal_main(test_folder_path: Path, _):
     debug = KCFDebugParams(showFeatures=False, showAlphaf=False, showTmpl=False, saveTrackerParams=False)
     flags = KCFFlags(hog=False, fixed_window=True, multiscale=False, normalizeShift=False, smoothMotion=True)
     train_params = KCFTrainParams(tmplsz=64, lambdar=0.0001, padding=2.5, output_sigma_factor=0.125, sigma=0.2,
@@ -78,9 +37,10 @@ def universal_main(test_folder_path: Path, _):
     _annotation_path = test_folder_path / config._annotation_name
     video_path = test_folder_path / config._video_name
     video_test_options = VideoTest.Options()
-    _frame_process_options = FrameProcessorUni.Options(skip_first_n_frames=60)
+    _frame_process_options = FrameProcessorUni.Options(skip_first_n_frames=0, wait_key_value=1, manual_roi_selection=True, start_paused_value=True)
 
-    _annotation = NullableAnnotation(_annotation_path)
+    # _annotation = NullableAnnotation(_annotation_path)
+    _annotation = None
     _video_writer = WebmVideoWriter(config._test_results_write_path)
     _analytics_engine = IOUs()
 
@@ -103,6 +63,7 @@ def universal_main(test_folder_path: Path, _):
             tracker=tracker_kcf,
             scaler=scaler,
             annotation=_annotation, 
+            options=_frame_process_options
             # analytics_engine=_analytics_engine,
         )
     oper = operation
@@ -117,4 +78,4 @@ def universal_main(test_folder_path: Path, _):
 
 
 if __name__ == "__main__":
-    universal_main(Path(r"/home/poul/temp/Vids/StreetVid_4"), None)
+    main(Path(r"/home/poul/temp/Vids/StreetVid_4"), None)

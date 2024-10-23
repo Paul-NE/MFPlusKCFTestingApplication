@@ -1,10 +1,15 @@
+from pathlib import Path
+
 from utils.utils import map_int_list
 from geometry import BoundingBox
 from video_processors.video_test import VideoTest
 # from analytic_tools.annotation_light import AnnotationLight
+from video_processors.video_test import VideoTest
+from video_processors.webm_video_writer import WebmVideoWriter
 
 import cv2
 import logging
+
 
 # Configure logging globally (done in main script usually)
 logging.basicConfig(level=logging.DEBUG, 
@@ -15,6 +20,7 @@ class Annotation(list):
         super().__init__(*args, **kwargs)
     
     # def 
+
 
 def annotation_from_file(path:str):
     return Annotation(annotation_file_process(path))
@@ -83,7 +89,20 @@ def run_test(annotation: Annotation):
     test = VideoTest(r"/media/poul/8A1A05931A057E07/Job_data/Datasets/Thermal/Annotated_Vidos/Videos/StreetVid_4.webm", oper)
     test.run()
 
+
+def mp4_to_webm(path_to_mp4: Path|str):
+    _path_to_mp4 = Path(path_to_mp4)
+    _webm_name = _path_to_mp4.stem + ".webm"
+    _path_to_webm = _path_to_mp4.parent / _webm_name
+    writer = WebmVideoWriter(_path_to_webm)
+    cap = cv2.VideoCapture(_path_to_mp4)
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        writer.write(frame)
+    writer.release()
+
+
 if __name__ == "__main__":
-    annotation = annotation_from_file(r"/media/poul/8A1A05931A057E07/Job_data/Datasets/Thermal/Annotated_Vidos/Annotation/StreetVid_4.csv")
-    run_test(annotation)
-    write_annoptation_light("/home/poul/temp/Vids/test.txt", annotation)
+    mp4_to_webm(r"/mnt/2terdisk/Job_data/Datasets/Thermal/SberAuto_1/out.mp4")

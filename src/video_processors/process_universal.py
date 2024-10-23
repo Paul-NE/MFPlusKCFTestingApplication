@@ -1,4 +1,4 @@
-from typing import Iterator, Self
+from typing import Iterator, Self, Callable, Any
 from dataclasses import dataclass
 
 import numpy as np
@@ -12,19 +12,81 @@ from trackers.tracker import AdjustableTracker
 from trackers.errors import NotInited
 from utils.utils import round_box
 # from trackers.median_flow_scale_only import MedianFlowScaleOnly
-from geometry import BoundingBox
+from geometry import BoundingBox, Point
 
 from .webm_video_writer import WebmVideoWriter
 from .video_test import VideoTest
+
+
+class ManualROISelector:
+    def __init__(self, win: str, callback:Callable[[BoundingBox], Any]):
+        self.win = win
+        self.callback = callback
+        cv2.namedWindow(win)
+        cv2.setMouseCallback(win, self.onmouse)
+        self.drag_start = None
+        self.drag_rect = None
+
+    def onmouse(self, event, x, y, flags, param):
+        x, y = np.int16([x, y]) # BUG
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.drag_start = (x, y)
+
+        if self.drag_start:
+            if event == cv2.EVENT_LBUTTONDOWN or \
+                (flags & cv2.EVENT_FLAG_LBUTTON and event != cv2.EVENT_LBUTTONUP):
+                xo, yo = self.drag_start
+                x0, y0 = np.minimum([xo, yo], [x, y])
+                x1, y1 = np.maximum([xo, yo], [x, y])
+                self.drag_rect = None
+                if x1-x0 > 0 and y1-y0 > 0:
+                    self.drag_rect = (x0, y0, x1, y1)
+            else:
+                rect = self.drag_rect
+                self.drag_start = None
+                self.drag_rect = None
+                if rect:
+                    box = BoundingBox(
+                        top_left_pnt=Point(
+                            x = rect[0],
+                            y = rect[1]
+                        ),
+                        bottom_right_pnt=Point(
+                            x = rect[2],
+                            y = rect[3]
+                        )
+                    )
+                    self.callback(box)
+
+    def draw(self, vis):
+        if not self.drag_rect:
+            return False
+        x0, y0, x1, y1 = self.drag_rect
+        cv2.rectangle(vis, (x0, y0), (x1, y1), (0, 255, 0), 2)
+        return True
+
+    @property
+    def dragging(self):
+        return self.drag_rect is not None
 
 
 class AnnotationManager:
     def __init__(self, annotation:AnnotationLight):
         self._annotation = annotation
         self._annotation_iter = iter(self._annotation)
+        self._last_seen_frame = 0
+    
+    def _process_frame_skipping(self, message: VideoTest.Message):
+        current_frame = message.video_capture.get(cv2.CAP_PROP_POS_FRAMES)
+        if self._last_seen_frame < current_frame - 1:
+            frames_to_skip_count = int(current_frame - 1 - self._last_seen_frame)
+            for _ in range(frames_to_skip_count):
+                next(self._annotation_iter)
+        self._last_seen_frame = current_frame
     
     def update(self, message: VideoTest.Message) -> BoundingBox:
         try: 
+            self._process_frame_skipping(message)
             annotation = next(self._annotation_iter)
             return BoundingBox.generate_from_list(annotation) if annotation is not None else None
         except StopIteration:
@@ -37,6 +99,21 @@ class TrackerScaleManager:
         self._tracker = tracker
         self._scaler = scaler
     
+    def init(self, message: VideoTest.Message, ground_true: BoundingBox) -> BoundingBox:
+        """Forced initialization, not recommended to use
+
+        Args:
+            message (VideoTest.Message): _description_
+            ground_true (BoundingBox): _description_
+
+        Returns:
+            BoundingBox: _description_
+        """
+        assert ground_true is not None
+        self._tracker.init(message.image, ground_true)
+        self._scaler.init(message.image, ground_true)
+        return None, None
+    
     def update(self, message: VideoTest.Message, annotation: BoundingBox|None=None) -> BoundingBox:
         try:
             tracker_result = self._tracker.update(message.image)
@@ -44,6 +121,7 @@ class TrackerScaleManager:
             if scaler_result is not None:
                 self._tracker.adjust_bounding_box(scaler_result)
                 return scaler_result, tracker_result
+            print(tracker_result.width)
             return tracker_result, scaler_result
         except NotInited:
             if annotation is not None:
@@ -88,26 +166,40 @@ class FrameProcessorUni:
     class Options:
         wait_key_value: int = 0
         start_paused_value: bool = False
+        manual_roi_selection: bool = False
         skip_first_n_frames: int = 0
     
     def __init__(
             self, 
             tracker:AdjustableTracker, 
             scaler:Scaler, 
-            annotation:AnnotationLight, 
+            annotation:AnnotationLight|None=None, 
             video_writer:WebmVideoWriter|None=None, 
             options:Options=None) -> None:
-        self.marker = MarkerManager(ImageMarks())
-        self.tracker = TrackerScaleManager(tracker, scaler)
-        self.annotation = AnnotationManager(annotation)
-        self.border = 70
+        
+        self._marker = MarkerManager(ImageMarks())
+        self._tracker = TrackerScaleManager(tracker, scaler)
+        self._annotation = AnnotationManager(annotation) if annotation is not None else None
         self._options = options if options is not None else self.Options()
         self._setup()
     
     def _setup(self):
         self._paused = self._options.start_paused_value
         self._keep_running = True
-        self._skip_first_n_frames = self._options.skip_first_n_frames
+        self._skip_n_frames = self._options.skip_first_n_frames
+        self._mouse_handler = None
+        self._mouse_box = None
+        self._setup_manual_run_command()
+    
+    def _setup_manual_run_command(self):
+        manual_annotated_commands = {
+            True: self._manual_roi_run,
+            False: self._annotated_run
+        }
+        self._run = manual_annotated_commands[self._options.manual_roi_selection]
+    
+    def _set_tracker_roi(self, roi: BoundingBox):
+        self._mouse_box = roi
     
     def _pause_unpause(self):
         self._paused = not self._paused
@@ -125,13 +217,32 @@ class FrameProcessorUni:
             self._keep_running = reactions[key]()
     
     def _process_pause(self, window: str, image: np.ndarray):
-        while self._paused:
+        while self._paused and self._keep_running:
             self._show(window, image)
             continue
     
     def _show(self, window: str, image: np.ndarray):
         cv2.imshow(window, image)
         self._key_process()
+    
+    def _manual_roi_run(self, message: VideoTest.Message) -> bool:
+        if self._mouse_handler is None:
+            print(f"{message.cv_window=}", self._set_tracker_roi)
+            self._mouse_handler = ManualROISelector(message.cv_window, self._set_tracker_roi)
+        if self._mouse_box is not None:
+            self._tracker.init(message, self._mouse_box)
+            self._mouse_box = None
+            return
+        scaler_box, tracker_box = self._tracker.update(message, None)
+        self._marker.add_box(scaler_box, (0, 255, 0))
+        self._marker.add_box(tracker_box)
+    
+    def _annotated_run(self, message: VideoTest.Message) -> bool:
+        annotation_box = self._annotation.update(message) if self._annotation is not None else None
+        scaler_box, tracker_box = self._tracker.update(message, annotation_box)
+        self._marker.add_box(annotation_box, (255, 0, 0))
+        self._marker.add_box(scaler_box, (0, 255, 0))
+        self._marker.add_box(tracker_box)
     
     def __call__(self, message: VideoTest.Message) -> bool:
         """One itteration of video process
@@ -142,20 +253,17 @@ class FrameProcessorUni:
         Returns:
             bool: don't stop processing
         """
-        
-        annotation_box = self.annotation.update(message)
-        if self.border > 0:
-            self.border-=1
+        if self._skip_n_frames > 0:
+            self._skip_n_frames-=1
             return self._keep_running
-        scaler_box, tracker_box = self.tracker.update(message, annotation_box)
-        self.marker.add_box(annotation_box, (255, 0, 0))
-        self.marker.add_box(scaler_box, (0, 255, 0))
-        self.marker.add_box(tracker_box)
         
-        image_marked = self.marker.mark_image(message.image)
+        self._run(message)
+        
+        image_marked = self._marker.mark_image(message.image)
         self._show(message.cv_window, image_marked)
         
         if self._paused: 
             self._process_pause(message.cv_window, image_marked)
         
         return self._keep_running
+    

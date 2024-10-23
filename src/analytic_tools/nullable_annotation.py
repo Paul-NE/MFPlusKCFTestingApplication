@@ -1,4 +1,5 @@
 import re
+from contextlib import contextmanager
 
 class NullableAnnotation(list):
     def __init__(self, path_to_annotation, *args, **kwargs) -> None:

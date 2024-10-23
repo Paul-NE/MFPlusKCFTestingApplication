@@ -16,7 +16,6 @@ from generators.grid_pts_generator import GridPtsGenerator
 from generators.pts_generator import PtsGenerator
 from video_processors.webm_video_writer import WebmVideoWriter
 from video_processors.video_test import VideoTest
-from video_processors.frame_process_skipable_scale_only import FrameProcessorSkipable
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
