@@ -38,6 +38,8 @@ class MFScaler(Scaler):
     def form_new_box(self, current_box: BoundingBox, dx_scale:float, dy_scale:float) -> BoundingBox:
         width, height = current_box.width, current_box.height
         current_center = current_box.center
+        dx_scale *= 2
+        dy_scale *= 2
         return BoundingBox(
             top_left_pnt = Point(
                 x = float(current_center.x - width/2 - dx_scale),

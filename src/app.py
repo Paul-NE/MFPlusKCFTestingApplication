@@ -23,9 +23,10 @@ from video_processors.webm_video_writer import WebmVideoWriter
 from video_processors.video_test import VideoTest
 from video_processors.process_universal import FrameProcessorUni
 from trackers.kcf.kcf import *
+from app_gui.utils import load_json
 
 
-def main(test_folder_path: Path, _):
+def main(test_folder_path: Path, config_optioins: dict):
     debug = KCFDebugParams(showFeatures=False, showAlphaf=False, showTmpl=False, saveTrackerParams=False)
     flags = KCFFlags(hog=False, fixed_window=True, multiscale=False, normalizeShift=False, smoothMotion=True)
     train_params = KCFTrainParams(tmplsz=64, lambdar=0.0001, padding=2.5, output_sigma_factor=0.125, sigma=0.2,
@@ -37,7 +38,12 @@ def main(test_folder_path: Path, _):
     _annotation_path = test_folder_path / config._annotation_name
     video_path = test_folder_path / config._video_name
     video_test_options = VideoTest.Options()
-    _frame_process_options = FrameProcessorUni.Options(skip_first_n_frames=0, wait_key_value=1, manual_roi_selection=True, start_paused_value=True)
+    _frame_process_options = FrameProcessorUni.Options(
+        skip_first_n_frames = config_optioins["frame_processor_options"]["skip_first_n_frames"], 
+        wait_key_value = config_optioins["frame_processor_options"]["wait_key_value"], 
+        manual_roi_selection = config_optioins["frame_processor_options"]["manual_roi_selection"], 
+        start_paused_value = config_optioins["frame_processor_options"]["start_paused_value"]
+        )
 
     # _annotation = NullableAnnotation(_annotation_path)
     _annotation = None
@@ -63,7 +69,8 @@ def main(test_folder_path: Path, _):
             tracker=tracker_kcf,
             scaler=scaler,
             annotation=_annotation, 
-            options=_frame_process_options
+            options=_frame_process_options,
+            video_writer=_video_writer
             # analytics_engine=_analytics_engine,
         )
     oper = operation
@@ -78,4 +85,5 @@ def main(test_folder_path: Path, _):
 
 
 if __name__ == "__main__":
-    main(Path(r"/home/poul/temp/Vids/StreetVid_4"), None)
+    params = load_json("./config_.json")
+    main(Path(r"/home/poul/temp/Vids/StreetVid_4"), params)

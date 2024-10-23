@@ -94,7 +94,6 @@ def getBorder(original, limited):
 def subwindow(img, window, borderType=cv2.BORDER_CONSTANT):
 	cutWindow = [x for x in window]
 	limit(cutWindow, [0, 0, img.shape[1], img.shape[0]])  # modify cutWindow
-	print(f"{cutWindow=}")
 	assert (cutWindow[2] > 0 and cutWindow[3] > 0)
 	border = getBorder(window, cutWindow)
 	res = img[cutWindow[1]:cutWindow[1] + cutWindow[3], cutWindow[0]:cutWindow[0] + cutWindow[2]]

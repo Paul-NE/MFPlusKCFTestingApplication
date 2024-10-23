@@ -107,9 +107,6 @@ class KCFTracker:
 		# 	self.PIDs = [PID(K_p=K_p, K_i=K_i, K_d=K_d, initial_error=initial_error),
 		# 	             PID(K_p=K_p, K_i=K_i, K_d=K_d, initial_error=initial_error)]
 
-		if self.debug.printTrackerParams:
-			print(params)
-
 		self.resize_algorithm = train.resize_algorithm
 		self.lambdar = train.lambdar  # regularization
 		self.padding = train.padding  # extra area surrounding the target
@@ -235,8 +232,6 @@ class KCFTracker:
 		extracted_roi[0] = int(cx - extracted_roi[2] / 2)
 		extracted_roi[1] = int(cy - extracted_roi[3] / 2)
 
-		print(f"{self._roi=}")
-		print(f"{extracted_roi=}")
 		z = subwindow(image, extracted_roi, cv2.BORDER_REPLICATE)
 		if z.shape[1] != self._tmpl_sz[0] or z.shape[0] != self._tmpl_sz[1]:
 			z = cv2.resize(z, tuple(self._tmpl_sz), interpolation=self.resize_algorithm)
@@ -250,12 +245,6 @@ class KCFTracker:
 			self.size_patch = list(map(int, [mapp['sizeY'], mapp['sizeX'], mapp['numFeatures']]))
 			# (size_patch[2], size_patch[0]*size_patch[1])
 			features_map = mapp['map'].reshape((self.size_patch[0] * self.size_patch[1], self.size_patch[2])).T
-			if self.debug.printMappData:
-				print(f'{mapp["map"].shape=}')
-				print(f'{mapp["sizeX"]=}')
-				print(f'{mapp["sizeY"]=}')
-				print(f'{mapp["numFeatures"]=}')
-				print(f'{features_map.shape=}')
 		else:
 			if z.ndim == 3 and z.shape[2] == 3:
 				# z:(size_patch[0], size_patch[1], 3)  FeaturesMap:(size_patch[0], size_patch[1])   #np.int8  #0~255
@@ -281,8 +270,6 @@ class KCFTracker:
 		self.res = res
 		_, pv, _, pi = cv2.minMaxLoc(res)  # pv:float  pi:tuple of int
 		p = [float(pi[0]), float(pi[1])]  # cv::Point2f, [x,y]  #[float,float]
-		# print("res max: ", np.max(res))
-		# print("res min: ", np.min(res))
 
 		if self._hogfeatures:
 			if self.debug.showFeatures:
@@ -316,12 +303,10 @@ class KCFTracker:
 		Cx = self._roi[0] + self._roi[2]/2 + T[0]
 		Cy = self._roi[1] + self._roi[3]/2 + T[1]
 		
-		print(f"{S=}")
 		self._roi[2] = max(self.min_roi_size, self._roi[2]*S[0])
 		self._roi[3] = max(self.min_roi_size, self._roi[3]*S[1])
 		self._roi[0] = Cx - self._roi[2] / 2
 		self._roi[1] = Cy - self._roi[3] / 2
-		print(f"{self._roi[2]=}")
 
 		self._roi[0] = 0 if self._roi[0] < 0 else self._roi[0]
 		self._roi[1] = 0 if self._roi[1] < 0 else self._roi[1]
@@ -536,19 +521,15 @@ class KCFLogging(KCFTracker):
 
 		t = time()
 		roi, peak = super().update(image)
-		print(roi)
 		self.time_for_last_update = time() - t
 
 		if self.save_features:
 			self.save_all_features(image=image, roi=roi)
 
 		self.rois.append(roi)
-		print(f"{roi[2:]=}")
 		self.feedbacks.append(peak)
 		# roi[0] = self.initial_roi[0]
 		# roi[1] = self.initial_roi[1]
-		# print(f"{roi=}")
-		# print(f"{self.initial_roi=}")
 		return roi
 	
 	def save_res(self):
@@ -676,7 +657,6 @@ class KCFTrackerNormal(KCFLogging):
 		self. _inited = False
 	def init(self, image: np.ndarray, box: BoundingBox):
 		roi = [box.top_left_pnt.x, box.top_left_pnt.y, box.width, box.height]
-		print(f"Init {roi=}")
 		# roi = [box.top_left_pnt.x, box.top_left_pnt.y, box.bottom_right_pnt.x, box.bottom_right_pnt.y]
 		self._inited = True
 		return super().init(roi, image)
@@ -699,5 +679,4 @@ class KCFTrackerNormal(KCFLogging):
 
 	def adjust_bounding_box(self, box: BoundingBox):
 		res = super().adjust_bounding_box(box)
-		print(f"{res=}")
 		return res

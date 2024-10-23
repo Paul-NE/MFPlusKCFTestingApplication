@@ -1,19 +1,8 @@
 {
-    "_meta": {},
-    "median_flow": {
-        "points_density": 20,
-        "max_forward_backward_error": 1,
-        "lk_optical_flow": {
-            "next_pts": null,
-            "win_Size": [11, 11],
-            "max_level": 3
-        }
-    },
-    "video_processor": {
-        "start_paused": false,
-        "wait_key": 1,
-        "annotated": true,
-        "skip_unannotated_start": false,
-        "skip_unannotated_end": false
+    "frame_processor_options": {
+        "wait_key_value": 1,
+        "start_paused_value": true,
+        "manual_roi_selection": true,
+        "skip_first_n_frames": 0
     }
 }

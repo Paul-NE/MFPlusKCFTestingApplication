@@ -118,10 +118,11 @@ class TrackerScaleManager:
         try:
             tracker_result = self._tracker.update(message.image)
             scaler_result = self._scaler.update(message.image, tracker_result)
+            print(scaler_result)
             if scaler_result is not None:
                 self._tracker.adjust_bounding_box(scaler_result)
                 return scaler_result, tracker_result
-            print(tracker_result.width)
+            print(f"{tracker_result.width=}")
             return tracker_result, scaler_result
         except NotInited:
             if annotation is not None:
@@ -178,6 +179,7 @@ class FrameProcessorUni:
             options:Options=None) -> None:
         
         self._marker = MarkerManager(ImageMarks())
+        self._video_writer = video_writer
         self._tracker = TrackerScaleManager(tracker, scaler)
         self._annotation = AnnotationManager(annotation) if annotation is not None else None
         self._options = options if options is not None else self.Options()
@@ -227,7 +229,6 @@ class FrameProcessorUni:
     
     def _manual_roi_run(self, message: VideoTest.Message) -> bool:
         if self._mouse_handler is None:
-            print(f"{message.cv_window=}", self._set_tracker_roi)
             self._mouse_handler = ManualROISelector(message.cv_window, self._set_tracker_roi)
         if self._mouse_box is not None:
             self._tracker.init(message, self._mouse_box)
@@ -260,6 +261,8 @@ class FrameProcessorUni:
         self._run(message)
         
         image_marked = self._marker.mark_image(message.image)
+        if self._video_writer is not None:
+            self._video_writer.write(image_marked)
         self._show(message.cv_window, image_marked)
         
         if self._paused: 
