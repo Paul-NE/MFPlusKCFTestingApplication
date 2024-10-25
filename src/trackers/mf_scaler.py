@@ -22,8 +22,6 @@ class MFScaler(Scaler):
             fb_filter:ForwardBackwardPntFilter, 
             fb_flow_generator:ForwardBachkwardFlow
         ):
-        self._ds_factor = 0.95
-        
         self._prev_image: np.ndarray
         self._inited: bool = False
         
@@ -38,8 +36,6 @@ class MFScaler(Scaler):
     def form_new_box(self, current_box: BoundingBox, dx_scale:float, dy_scale:float) -> BoundingBox:
         width, height = current_box.width, current_box.height
         current_center = current_box.center
-        dx_scale *= 2
-        dy_scale *= 2
         return BoundingBox(
             top_left_pnt = Point(
                 x = float(current_center.x - width/2 - dx_scale),
@@ -55,7 +51,6 @@ class MFScaler(Scaler):
         previous_points_distances = distances_between_all_points(previous_points)
         current_points_distances = distances_between_all_points(current_points)
         ds = np.sqrt(np.median(current_points_distances / (previous_points_distances + 2**-23)))
-        ds = (1.0 - self._ds_factor) + self._ds_factor * ds # TODO self._ds_factor
         return ds
     
     def init(self, image:np.ndarray, box:BoundingBox):

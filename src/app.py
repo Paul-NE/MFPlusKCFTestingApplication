@@ -28,7 +28,7 @@ from app_gui.utils import load_json
 
 def main(test_folder_path: Path, config_optioins: dict):
     debug = KCFDebugParams(showFeatures=False, showAlphaf=False, showTmpl=False, saveTrackerParams=False)
-    flags = KCFFlags(hog=False, fixed_window=True, multiscale=False, normalizeShift=False, smoothMotion=True)
+    flags = KCFFlags(hog=False, fixed_window=True, multiscale=False, normalizeShift=False, smoothMotion=False)
     train_params = KCFTrainParams(tmplsz=64, lambdar=0.0001, padding=2.5, output_sigma_factor=0.125, sigma=0.2,
                                     interp_factor=0.001)
     hog = KCFHogParams(NUM_SECTOR=9, cell_size=4)

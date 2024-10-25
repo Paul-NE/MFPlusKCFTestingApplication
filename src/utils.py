@@ -104,5 +104,22 @@ def mp4_to_webm(path_to_mp4: Path|str):
     writer.release()
 
 
+def write_in_reverse(source: Path|str):
+    _path_to_source = Path(source)
+    _webm_name = _path_to_source.stem + "_reversed.webm"
+    _path_to_webm = _path_to_source.parent / _webm_name
+    writer = WebmVideoWriter(_path_to_webm)
+    cap = cv2.VideoCapture(_path_to_source)
+    images = []
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        images.append(frame)
+    for frame in images[::-1]:
+        writer.write(frame)
+    writer.release()
+
+
 if __name__ == "__main__":
-    mp4_to_webm(r"/mnt/2terdisk/Job_data/Datasets/Thermal/SberAuto_1/out.mp4")
+    write_in_reverse(r"/mnt/2terdisk/Job_data/Datasets/Thermal/SberAuto_1/out.mp4")
