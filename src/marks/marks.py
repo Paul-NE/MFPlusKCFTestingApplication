@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import cv2
 
-from geometry import BoundingBox
+from geometry import BoundingBox, Point
 from utils.utils import map_int_list
 
 
@@ -26,6 +26,10 @@ class Mark(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
+        pass
+    
+    @property
+    def style(self):
         pass
     
     @abstractmethod
@@ -70,6 +74,42 @@ class Rectangle(Mark):
         return new_image
 
 
+class Vector(Mark):
+    def __init__(self, data: tuple[Point, Point]) -> None: 
+        self._data = data
+        self._style: Style = Style(
+            color=(0, 0, 255),
+            thickness=2
+        )
+    
+    @property
+    def name(self) -> str:
+        return "vector"
+    
+    @property
+    def style(self):
+        return self._style
+    
+    def draw_self(self, image: np.ndarray) -> np.ndarray:
+        start = self._data[0]
+        end = self._data[1]
+        new_image = cv2.circle(
+            image, 
+            [round(start.x), round(start.y)],
+            self._style.thickness,
+            self._style.color,
+            -1
+        )
+        new_image = cv2.line(
+            img=new_image,
+            pt1=[round(start.x), round(start.y)],
+            pt2=[round(end.x), round(end.y)],
+            color=self.style.color,
+            thickness=max(1, int(self._style.thickness//2)),
+        )
+        return new_image
+
+
 class ImageMarks:
     """Object to store and draw marks
     """
@@ -81,6 +121,7 @@ class ImageMarks:
         return self._marks.copy()
     
     def draw_all(self, image: np.ndarray):
+        
         image_copy = np.copy(image)
         for mark in self._marks:
             image_copy = mark.draw_self(image_copy)

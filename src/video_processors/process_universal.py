@@ -16,14 +16,15 @@ from geometry import BoundingBox, Point
 
 from .webm_video_writer import WebmVideoWriter
 from .video_test import VideoTest
+from .window_manager import Window, WindowManager
 
 
 class ManualROISelector:
-    def __init__(self, win: str, callback:Callable[[BoundingBox], Any]):
-        self.win = win
+    def __init__(self, window_name: str, callback:Callable[[BoundingBox], Any]):
+        self._window_name = window_name
         self.callback = callback
-        cv2.namedWindow(win)
-        cv2.setMouseCallback(win, self.onmouse)
+        cv2.namedWindow(window_name)
+        cv2.setMouseCallback(window_name, self.onmouse)
         self.drag_start = None
         self.drag_rect = None
 
@@ -31,32 +32,37 @@ class ManualROISelector:
         x, y = np.int16([x, y]) # BUG
         if event == cv2.EVENT_LBUTTONDOWN:
             self.drag_start = (x, y)
-
-        if self.drag_start:
-            if event == cv2.EVENT_LBUTTONDOWN or \
-                (flags & cv2.EVENT_FLAG_LBUTTON and event != cv2.EVENT_LBUTTONUP):
-                xo, yo = self.drag_start
-                x0, y0 = np.minimum([xo, yo], [x, y])
-                x1, y1 = np.maximum([xo, yo], [x, y])
-                self.drag_rect = None
-                if x1-x0 > 0 and y1-y0 > 0:
-                    self.drag_rect = (x0, y0, x1, y1)
-            else:
-                rect = self.drag_rect
-                self.drag_start = None
-                self.drag_rect = None
-                if rect:
-                    box = BoundingBox(
-                        top_left_pnt=Point(
-                            x = rect[0],
-                            y = rect[1]
-                        ),
-                        bottom_right_pnt=Point(
-                            x = rect[2],
-                            y = rect[3]
-                        )
-                    )
-                    self.callback(box)
+        
+        if not self.drag_start:
+            return
+        
+        if event == cv2.EVENT_LBUTTONDOWN or \
+        (flags & cv2.EVENT_FLAG_LBUTTON and event != cv2.EVENT_LBUTTONUP):
+            xo, yo = self.drag_start
+            x0, y0 = np.minimum([xo, yo], [x, y])
+            x1, y1 = np.maximum([xo, yo], [x, y])
+            self.drag_rect = None
+            if x1-x0 > 0 and y1-y0 > 0:
+                self.drag_rect = (x0, y0, x1, y1)
+            return
+        
+        if not self.drag_rect:
+            return
+        
+        rect = self.drag_rect
+        self.drag_start = None
+        self.drag_rect = None
+        box = BoundingBox(
+            top_left_pnt=Point(
+                x = rect[0],
+                y = rect[1]
+            ),
+            bottom_right_pnt=Point(
+                x = rect[2],
+                y = rect[3]
+            )
+        )
+        self.callback(box)
 
     def draw(self, vis):
         if not self.drag_rect:
@@ -95,7 +101,7 @@ class AnnotationManager:
 
 
 class TrackerScaleManager:
-    def __init__(self, tracker:AdjustableTracker, scaler: Scaler):
+    def __init__(self, tracker:AdjustableTracker, scaler: Scaler|None):
         self._tracker = tracker
         self._scaler = scaler
     
@@ -111,24 +117,31 @@ class TrackerScaleManager:
         """
         assert ground_true is not None
         self._tracker.init(message.image, ground_true)
-        self._scaler.init(message.image, ground_true)
+        if self._scaler is not None:
+            self._scaler.init(message.image, ground_true)
+        
         return None, None
     
     def update(self, message: VideoTest.Message, annotation: BoundingBox|None=None) -> BoundingBox:
         try:
             tracker_result = self._tracker.update(message.image)
+            if self._scaler is None:
+                return tracker_result, None
+            
             scaler_result = self._scaler.update(message.image, tracker_result)
-            print(scaler_result)
             if scaler_result is not None:
                 self._tracker.adjust_bounding_box(scaler_result)
                 return scaler_result, tracker_result
-            print(f"{tracker_result.width=}")
+            
             return tracker_result, scaler_result
         except NotInited:
-            if annotation is not None:
-                self._tracker.init(message.image, annotation)
-                self._scaler.init(message.image, annotation)
+            if annotation is None:
                 return None, None
+            self._tracker.init(message.image, annotation)
+            
+            if self._scaler is None:
+                return None, None
+            self._scaler.init(message.image, annotation)
             return None, None
 
 
@@ -176,14 +189,26 @@ class FrameProcessorUni:
             scaler:Scaler, 
             annotation:AnnotationLight|None=None, 
             video_writer:WebmVideoWriter|None=None, 
-            options:Options=None) -> None:
+            windows_to_show:list[Window]|None=None,
+            options:Options=None
+            ) -> None:
+        
+        self._window_manager = WindowManager()
+        self._setip_window_manager(windows_to_show)
+        self._main_window: Window = None
         
         self._marker = MarkerManager(ImageMarks())
         self._video_writer = video_writer
         self._tracker = TrackerScaleManager(tracker, scaler)
         self._annotation = AnnotationManager(annotation) if annotation is not None else None
+        
         self._options = options if options is not None else self.Options()
         self._setup()
+    
+    def _setip_window_manager(self, windows_to_show:list[Window]|None) -> None:
+        if windows_to_show is None:
+            return
+        self._window_manager.add_windows(windows_to_show)
     
     def _setup(self):
         self._paused = self._options.start_paused_value
@@ -223,13 +248,18 @@ class FrameProcessorUni:
             self._show(window, image)
             continue
     
-    def _show(self, window: str, image: np.ndarray):
-        cv2.imshow(window, image)
+    def _show(self, window_name: str, image: np.ndarray):
+        # cv2.imshow(window_name, image)
+        if self._main_window is None:
+            self._main_window = Window(window_name)
+            self._window_manager.add_windows([self._main_window])
+        self._main_window.frame = image
+        self._window_manager.show_all()
         self._key_process()
     
     def _manual_roi_run(self, message: VideoTest.Message) -> bool:
         if self._mouse_handler is None:
-            self._mouse_handler = ManualROISelector(message.cv_window, self._set_tracker_roi)
+            self._mouse_handler = ManualROISelector(message.window_name, self._set_tracker_roi)
         if self._mouse_box is not None:
             self._tracker.init(message, self._mouse_box)
             self._mouse_box = None
@@ -263,10 +293,10 @@ class FrameProcessorUni:
         image_marked = self._marker.mark_image(message.image)
         if self._video_writer is not None:
             self._video_writer.write(image_marked)
-        self._show(message.cv_window, image_marked)
+        self._show(message.window_name, image_marked)
         
         if self._paused: 
-            self._process_pause(message.cv_window, image_marked)
+            self._process_pause(message.window_name, image_marked)
         
         return self._keep_running
     

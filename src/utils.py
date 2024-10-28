@@ -79,7 +79,7 @@ class TerstRun:
             bounding_box = None
         if bounding_box is not None:
             cv2.rectangle(image, bounding_box[:2], bounding_box[2:], (0, 0, 255))
-        cv2.imshow(message.cv_window, message.image)
+        cv2.imshow(message.window_name, message.image)
         cv2.waitKey(1)
         return True
 
@@ -122,4 +122,4 @@ def write_in_reverse(source: Path|str):
 
 
 if __name__ == "__main__":
-    write_in_reverse(r"/mnt/2terdisk/Job_data/Datasets/Thermal/SberAuto_1/out.mp4")
+    mp4_to_webm(r"/home/poul/temp/Vids/Video(21).mkv")

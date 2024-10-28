@@ -14,7 +14,7 @@ class VideoTest:
     class Message:
         video_path: str
         video_capture: cv2.VideoCapture
-        cv_window: str
+        window_name: str
         image: np.ndarray
         
     def __init__(self, video: cv2.VideoCapture, operation: Callable[[Message], bool], options: Options = None):
@@ -43,7 +43,7 @@ class VideoTest:
         return self.Message(
             video_path = self._video_path,
             video_capture = self._video_capture,
-            cv_window = self._options.window,
+            window_name = self._options.window,
             image = image
         )
     

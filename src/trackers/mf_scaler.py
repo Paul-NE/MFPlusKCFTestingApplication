@@ -1,5 +1,10 @@
+from dataclasses import dataclass
+import logging
+
 import numpy as np
 
+from marks.marks import ImageMarks, Vector
+from video_processors.window_manager import Window
 from generators.pts_generator import PtsGenerator
 from geometry import BoundingBox, Point, PointsArray
 from utils.utils import distances_between_all_points, crop_out_of_frame_box
@@ -16,18 +21,32 @@ class MFScaler(Scaler):
     Args:
         Tracker (_type_): _description_
     """
+    @dataclass
+    class Options:
+        debug_visualization: bool = False
+        debug_key_points_window: str = "key_points"
     def __init__(
             self, 
             pts_gener:PtsGenerator, 
             fb_filter:ForwardBackwardPntFilter, 
-            fb_flow_generator:ForwardBachkwardFlow
+            fb_flow_generator:ForwardBachkwardFlow,
+            options:Options|None=None
         ):
+        self._debug_windows:dict[str, Window] = {}
+        self._key_point_marker = ImageMarks()
         self._prev_image: np.ndarray
         self._inited: bool = False
         
         self._pts_gener: PtsGenerator = pts_gener
         self._fb_filter: ForwardBackwardPntFilter = fb_filter
         self._flow_generator: ForwardBachkwardFlow = fb_flow_generator
+        
+        self._options = options if options is not None else self.Options()
+        if self._options.debug_visualization:
+            self._debug_windows[self._options.debug_key_points_window] = Window(self._options.debug_key_points_window)
+        
+        self._logger = logging.getLogger(f"{self.__class__.__name__}")
+        self._logger.info(f"Initialized with options: {self._options}")
     
     @property
     def inited(self):
@@ -80,6 +99,26 @@ class MFScaler(Scaler):
             current_pnts=current_pts,
             backward_pnts=backward_pts
         )
+        
+        self._logger.info(f"Pts forward-backward filter not passed: {len(p0_bad)}")
+        self._logger.info(f"Pts forward-backward filter passed: {len(filtered_current_pts)}")
+        
+        if not self._options.debug_visualization:
+            return filtered_current_pts, filtered_backward_pts
+        
+        for previous_point_x, previous_point_y, current_point_x, current_point_y in zip(
+            filtered_backward_pts.x, 
+            filtered_backward_pts.y,
+            filtered_current_pts.x, 
+            filtered_current_pts.y
+        ):
+            mark = Vector((
+                Point(previous_point_x, previous_point_y),
+                Point(current_point_x, current_point_y)
+            ))
+            mark.style.color = (0, 255, 0)
+            self._key_point_marker.add(mark)
+        
         return filtered_current_pts, filtered_backward_pts
     
     def update(self, image: np.ndarray, current_box:BoundingBox):
@@ -101,6 +140,14 @@ class MFScaler(Scaler):
         
         crop_out_of_frame_box(bb_new, image.shape)
         
+        self._update_debug_windows(image)
         self._prev_image = image
         return bb_new
+    
+    def _update_debug_windows(self, image:np.ndarray):
+        self._debug_windows[self._options.debug_key_points_window].frame = self._key_point_marker.draw_all(image)
+        self._key_point_marker.clear()
+    
+    def get_debug_windows(self):
+        return list(self._debug_windows.values())
 
