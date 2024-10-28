@@ -106,6 +106,12 @@ class MFScaler(Scaler):
         if not self._options.debug_visualization:
             return filtered_current_pts, filtered_backward_pts
         
+        self._write_debug_point_marks(filtered_current_pts, filtered_backward_pts, (0, 255, 0))
+        self._write_debug_point_marks(p0_bad, p1_bad, (0, 0, 255))
+        
+        return filtered_current_pts, filtered_backward_pts
+    
+    def _write_debug_point_marks(self, filtered_backward_pts: PointsArray, filtered_current_pts:PointsArray, color:tuple[int, int, int]):
         for previous_point_x, previous_point_y, current_point_x, current_point_y in zip(
             filtered_backward_pts.x, 
             filtered_backward_pts.y,
@@ -116,10 +122,8 @@ class MFScaler(Scaler):
                 Point(previous_point_x, previous_point_y),
                 Point(current_point_x, current_point_y)
             ))
-            mark.style.color = (0, 255, 0)
+            mark.style.color = color
             self._key_point_marker.add(mark)
-        
-        return filtered_current_pts, filtered_backward_pts
     
     def update(self, image: np.ndarray, current_box:BoundingBox):
         if not self._inited:
