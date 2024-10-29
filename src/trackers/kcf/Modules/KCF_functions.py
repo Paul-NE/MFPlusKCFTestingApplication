@@ -44,7 +44,7 @@ def complexDivision(a, b):
 	return res
 
 
-def rearrange(img):
+def rearrange(img: np.ndarray):
 	# return np.fft.fftshift(img, axes=(0,1))
 	assert (img.ndim == 2)
 	img_ = np.zeros(img.shape, img.dtype)
@@ -55,11 +55,11 @@ def rearrange(img):
 
 
 # recttools
-def x2(rect):
+def x2(rect: list):
 	return rect[0] + rect[2]
 
 
-def y2(rect):
+def y2(rect: list):
 	return rect[1] + rect[3]
 
 
@@ -91,7 +91,7 @@ def getBorder(original, limited):
 	return res
 
 
-def subwindow(img, window, borderType=cv2.BORDER_CONSTANT):
+def subwindow(img, window, borderType=cv2.BORDER_CONSTANT) -> np.ndarray:
 	cutWindow = [x for x in window]
 	limit(cutWindow, [0, 0, img.shape[1], img.shape[0]])  # modify cutWindow
 	assert (cutWindow[2] > 0 and cutWindow[3] > 0)
