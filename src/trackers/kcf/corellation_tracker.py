@@ -1,5 +1,6 @@
-import cv2
+import logging
 
+import cv2
 import numpy as np
 
 from .Modules.Correlation.gaussianCorrelation import *
@@ -11,42 +12,45 @@ from trackers.tracker import AdjustableTracker
 
 
 class CorellationTracker(AdjustableTracker):
-    def __init__(self):
+    @dataclass
+    class MathParameters:
+        template_size: int = 32
+        padding: float = 2.5
+        output_sigma_factor: float = 0.125
+        interp_factor: float = 0.012
+        sigma: float = 0.6
+
+    def __init__(self, math_parameters: MathParameters|None=None):
         self._inited: bool = False
         self._roi_box: BoundingBox|None = None
 
-        self.resize_algorithm = cv2.INTER_NEAREST
+        self._resize_algorithm = cv2.INTER_NEAREST
+        self._square_tmpl = True
 
-        self.template_size = 32
-        self.lambdar = 0.0001
-        self.padding = 2.5
-        self.output_sigma_factor = 0.125
-        self.interp_factor = 0.012
-        self.sigma = 0.6
+        self._math_parameters = math_parameters if math_parameters is not None else self.MathParameters()
         
-        self.square_tmpl = True
+        
         self._scaleW = 1.
         self._scaleH = 1.
+        self._scale = 1.
         
         self._tmpl_sz = [0, 0]  # cv::Size, [width,height]  #[int,int]
         self._roi = [0., 0., 0., 0.]  # cv::Rect2f, [x,y,width,height]  #[float,float,float,float]
-        self.size_patch = [0, 0, 0]  # [int,int,int]
-        self._scale = 1.  # float
-        self._alphaf = None  # numpy.ndarray    (size_patch[0], size_patch[1], 2)
-        self._prob = None  # numpy.ndarray    (size_patch[0], size_patch[1], 2)
-        self._tmpl = None
-        self.hann = None
+        self._size_patch = [0, 0, 0]  # [int,int,int]
+        self._tmpl: np.ndarray|None = None
+        self._hann: np.ndarray|None = None
         
+        self._logger = logging.getLogger(f"{self.__class__.__name__}")
+        self._logger.info(f"Created with math parameters {self._math_parameters}")
     
     def init(self, image:np.ndarray, bounding_box: BoundingBox) -> None:
         self._roi_box = bounding_box
         top_left_point = bounding_box.top_left_pnt
-        bottom_right_point = bounding_box.bottom_right_pnt
         roi = [
             top_left_point.x,
             top_left_point.y,
-            bottom_right_point.x,
-            bottom_right_point.y]
+            bounding_box.width,
+            bounding_box.height]
         self._roi = list(map(float, roi))
         
         assert (roi[2] > 0 and roi[3] > 0)
@@ -55,14 +59,15 @@ class CorellationTracker(AdjustableTracker):
         # TODO refactor here ========================
         self._correlation_method = gaussianCorrelation_c(
             hogfeatures=False, 
-            size_patch=self.size_patch,
-            resize_algorithm=self.resize_algorithm, 
+            size_patch=self._size_patch,
+            resize_algorithm=self._resize_algorithm, 
             showFeatures=False, 
-            sigma=self.sigma)
+            sigma=self._math_parameters.sigma)
         # TODO refactor here ========================
         
         self._train(self._tmpl, 1.0)
         self._inited = True
+        self._logger.info(f"Inited. Current roi: {self._roi_box}")
     
     def update(self, image: np.ndarray) -> BoundingBox:
         if not self._inited:
@@ -98,9 +103,9 @@ class CorellationTracker(AdjustableTracker):
         assert (self._roi[2] > 0 and self._roi[3] > 0)
 
         x = self._get_features(image, 0, 1.0)
-        self._train(x, self.interp_factor)
+        self._train(x, self._math_parameters.interp_factor)
         
-        return BoundingBox(
+        new_roi = BoundingBox(
             top_left_pnt=Point(
                 x=self._roi[0],
                 y=self._roi[1]
@@ -110,6 +115,8 @@ class CorellationTracker(AdjustableTracker):
                 y=self._roi[1] + self._roi[3]
             )
         )
+        self._logger.info(f"Updated. Current roi: {new_roi}")
+        return new_roi
     
     @property
     def inited(self) -> bool:
@@ -137,18 +144,18 @@ class CorellationTracker(AdjustableTracker):
         return 0 if abs(divisor) < 1e-3 else 0.5 * (right - left) / divisor
 
     def _create_hanning_mats(self):
-        hann2t, hann1t = np.ogrid[0:self.size_patch[0], 0:self.size_patch[1]]
+        hann2t, hann1t = np.ogrid[0:self._size_patch[0], 0:self._size_patch[1]]
 
-        hann1t = 0.5 * (1 - np.cos(2 * np.pi * hann1t / (self.size_patch[1] - 1)))
-        hann2t = 0.5 * (1 - np.cos(2 * np.pi * hann2t / (self.size_patch[0] - 1)))
+        hann1t = 0.5 * (1 - np.cos(2 * np.pi * hann1t / (self._size_patch[1] - 1)))
+        hann2t = 0.5 * (1 - np.cos(2 * np.pi * hann2t / (self._size_patch[0] - 1)))
         hann2d = hann2t * hann1t
         
-        self.hann = hann2d
-        self.hann = self.hann.astype(np.float32)
+        self._hann = hann2d
+        self._hann = self._hann.astype(np.float32)
 
     def _create_gaussian_peak(self, sizey, sizex):
         syh, sxh = sizey // 2, sizex // 2
-        output_sigma = np.sqrt(sizex * sizey) / self.padding * self.output_sigma_factor
+        output_sigma = np.sqrt(sizex * sizey) / self._math_parameters.padding * self._math_parameters.output_sigma_factor
         mult = -0.5 / (output_sigma * output_sigma)
         y, x = np.ogrid[0:sizey, 0:sizex]
         y, x = (y - syh)**2, (x - sxh)**2
@@ -163,19 +170,19 @@ class CorellationTracker(AdjustableTracker):
         cx = self._roi[0] + self._roi[2] // 2  # float
         cy = self._roi[1] + self._roi[3] // 2  # float
         if inithann:
-            padded_w = self._roi[2] * self.padding
-            padded_h = self._roi[3] * self.padding
-            self._scale = max(padded_w, padded_h) / float(self.template_size)
+            padded_w = self._roi[2] * self._math_parameters.padding
+            padded_h = self._roi[3] * self._math_parameters.padding
+            self._scale = max(padded_w, padded_h) / float(self._math_parameters.template_size)
 
-            self._scaleW = padded_w / float(self.template_size)
-            self._scaleH = padded_h / float(self.template_size)
+            self._scaleW = padded_w / float(self._math_parameters.template_size)
+            self._scaleH = padded_h / float(self._math_parameters.template_size)
             # self._scaleW = self._scaleH = self._scale
 
             self._tmpl_sz[0] = int(padded_w / self._scale)
             self._tmpl_sz[1] = int(padded_h / self._scale)
             
-            if self.square_tmpl:
-                self._tmpl_sz[0] = self._tmpl_sz[1] = self.template_size
+            if self._square_tmpl:
+                self._tmpl_sz[0] = self._tmpl_sz[1] = self._math_parameters.template_size
             
             # Make _tmpl_sz even
             self._tmpl_sz[0] = int(self._tmpl_sz[0]) // 2 * 2
@@ -188,16 +195,16 @@ class CorellationTracker(AdjustableTracker):
 
         z = subwindow(image, extracted_roi, cv2.BORDER_REPLICATE)
         if z.shape[1] != self._tmpl_sz[0] or z.shape[0] != self._tmpl_sz[1]:
-            z = cv2.resize(z, tuple(self._tmpl_sz), interpolation=self.resize_algorithm)
+            z = cv2.resize(z, tuple(self._tmpl_sz), interpolation=self._resize_algorithm)
         
         features_map = z if z.ndim == 2 else cv2.cvtColor(z, cv2.COLOR_BGR2GRAY)
         
         features_map = features_map.astype(np.float32) / 255.0 - 0.5
-        self.size_patch = [z.shape[0], z.shape[1], 1]
+        self._size_patch = [z.shape[0], z.shape[1], 1]
         if inithann:
             self._create_hanning_mats()
 
-        features_map = self.hann * features_map
+        features_map = self._hann * features_map
         return features_map
 
     def detect(self, z, x):

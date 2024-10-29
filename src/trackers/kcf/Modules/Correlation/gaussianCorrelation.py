@@ -95,30 +95,10 @@ class gaussianCorrelation_c:
                 # caux = rearrange(caux)
                 c += caux
             c = rearrange(c)
-
-            if self.showFeatures:
-                cv2.imshow(
-                    'Hog cor',
-                    cv2.resize(cv2.normalize(c, None), (self.size_patch[1] * 30, self.size_patch[0] * 30),
-                        interpolation=self.resize_algorithm))
-            if self.saveFeatures:
-                cv2.imwrite(fr'/media/poul/8A1A05931A057E07/Job_data/Datasets/Thermal/testing/trashcan_test/hog_features/gaussianCorrelation/{self.i}.jpg', cv2.resize(cv2.normalize(c, None) * 255, (self.size_patch[0] * 30, self.size_patch[1] * 30), interpolation=self.resize_algorithm))
         else:
             c = cv2.mulSpectrums(fftd(x1), fftd(x2), 0, conjB=True)  # 'conjB=' is necessary!
             c = fftd(c, True)
             c = real(c)
             c = rearrange(c)
-        #     if self.showFeatures:
-        #         cv2.imshow('Normal cor', cv2.resize(cv2.normalize(c, None), (self.size_patch[0] * 30, self.size_patch[1] * 30), interpolation=self.resize_algorithm))
-
-        # if x1.ndim == 3 and x2.ndim == 3:
-        #     d = (np.sum(x1[:, :, 0] * x1[:, :, 0]) + np.sum(x2[:, :, 0] * x2[:, :, 0]) - 2.0 * c) / (
-        #                 self.size_patch[0] * self.size_patch[1] * self.size_patch[2])
-        # elif x1.ndim == 2 and x2.ndim == 2:
-        #     d = (np.sum(x1 * x1) + np.sum(x2 * x2) - 2.0 * c) / (
-        #                 self.size_patch[0] * self.size_patch[1] * self.size_patch[2])
-
-        # d = d * (d >= 0)
-        # d = np.exp(-d / (self.sigma * self.sigma))
 
         return c

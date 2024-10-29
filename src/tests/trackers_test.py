@@ -7,7 +7,7 @@ if parent_dir not in sys.path:
 
 import numpy as np
 
-from trackers.kcf.kcf_refactored import CorellationTracker
+from trackers.kcf.corellation_tracker import CorellationTracker
 from geometry import Point, BoundingBox
 
 def test_corellation():
@@ -32,6 +32,7 @@ def test_corellation():
     ] = np.ones((box.height, box.width),np.uint8)* 255
     
     tracker.init(img1, box)
+    print(box)
     result = tracker. update(img2)
     print(result)
     
