@@ -9,9 +9,18 @@ from .Modules.fhog import *
 from geometry import BoundingBox, Point
 from trackers.errors import NotInited
 from trackers.tracker import AdjustableTracker
+from video_processors.window_manager import Window
 
 
 class CorellationTracker(AdjustableTracker):
+    @dataclass
+    class Options:
+        retrain_on_update: bool = True
+        retrain_on_adjust: bool = True
+        debug_visualization: bool = False
+        debug_features_window_name: str = "Corellation_tmpl"
+        debug_features_window_size: tuple[int, int] = (320, 320)
+    
     @dataclass
     class MathParameters:
         template_size: int = 32
@@ -20,7 +29,7 @@ class CorellationTracker(AdjustableTracker):
         interp_factor: float = 0.012
         sigma: float = 0.6
 
-    def __init__(self, math_parameters: MathParameters|None=None):
+    def __init__(self, math_parameters: MathParameters|None=None, options: Options|None = None):
         self._inited: bool = False
         self._roi_box: BoundingBox|None = None
 
@@ -28,7 +37,7 @@ class CorellationTracker(AdjustableTracker):
         self._square_tmpl = True
 
         self._math_parameters = math_parameters if math_parameters is not None else self.MathParameters()
-        
+        self._options = options if options is not None else self.Options()
         
         self._scaleW = 1.
         self._scaleH = 1.
@@ -39,7 +48,12 @@ class CorellationTracker(AdjustableTracker):
         self._size_patch = [0, 0, 0]  # [int,int,int]
         self._tmpl: np.ndarray|None = None
         self._hann: np.ndarray|None = None
+        self._image_buffer: np.ndarray|None = None
         
+        self._debug_windows:dict[str, Window] = {}
+        if self._options.debug_visualization:
+            self._debug_windows[self._options.debug_features_window_name] = Window(self._options.debug_features_window_name)
+            
         self._logger = logging.getLogger(f"{self.__class__.__name__}")
         self._logger.info(f"Created with math parameters {self._math_parameters}")
     
@@ -53,7 +67,7 @@ class CorellationTracker(AdjustableTracker):
             bounding_box.height]
         self._roi = list(map(float, roi))
         
-        assert (roi[2] > 0 and roi[3] > 0)
+        assert (self._roi_box.width > 0 and self._roi_box.height > 0)
         self._tmpl = self._get_features(image, 1)
         
         # TODO refactor here ========================
@@ -65,13 +79,13 @@ class CorellationTracker(AdjustableTracker):
             sigma=self._math_parameters.sigma)
         # TODO refactor here ========================
         
-        self._train(self._tmpl, 1.0)
         self._inited = True
         self._logger.info(f"Inited. Current roi: {self._roi_box}")
     
     def update(self, image: np.ndarray) -> BoundingBox:
         if not self._inited:
             raise NotInited()
+        self._image_buffer = image
         
         if self._roi[0] + self._roi[2] <= 0:
             self._roi[0] = -self._roi[2] + 1
@@ -100,10 +114,10 @@ class CorellationTracker(AdjustableTracker):
             self._roi[0] = -self._roi[2] + 2
         if self._roi[1] + self._roi[3] <= 0:
             self._roi[1] = -self._roi[3] + 2
-        assert (self._roi[2] > 0 and self._roi[3] > 0)
-
-        x = self._get_features(image, 0, 1.0)
-        self._train(x, self._math_parameters.interp_factor)
+        
+        if self._options.retrain_on_update:
+            x = self._get_features(image, 0, 1.0)
+            self._train(x, self._math_parameters.interp_factor)
         
         new_roi = BoundingBox(
             top_left_pnt=Point(
@@ -115,6 +129,7 @@ class CorellationTracker(AdjustableTracker):
                 y=self._roi[1] + self._roi[3]
             )
         )
+        self._roi_box = new_roi
         self._logger.info(f"Updated. Current roi: {new_roi}")
         return new_roi
     
@@ -126,6 +141,16 @@ class CorellationTracker(AdjustableTracker):
         bounding_box_width = bounding_box.width
         bounding_box_height = bounding_box.height
         center = self._roi_box.center
+        cx = self._roi[0] + self._roi[2] / 2
+        cy = self._roi[1] + self._roi[3] / 2
+        self._roi[0] = cx - bounding_box_width/2
+        self._roi[1] = cy - bounding_box_height/2
+        self._roi[2] = bounding_box_width
+        self._roi[3] = bounding_box_height
+        
+        if self._options.retrain_on_adjust:
+            x = self._get_features(self._image_buffer, 0, 1.0)
+            self._train(x, self._math_parameters.interp_factor)
         
         res = BoundingBox(
             top_left_pnt=Point(
@@ -239,3 +264,16 @@ class CorellationTracker(AdjustableTracker):
 
     def _train(self, x, train_interp_factor):
         self._tmpl = (1 - train_interp_factor) * self._tmpl + train_interp_factor * x
+        
+        if not self._options.debug_visualization:
+            return
+        tmpl_vis = cv2.resize(self._tmpl, self._options.debug_features_window_size, interpolation=cv2.INTER_NEAREST)
+        tmpl_vis += np.abs(np.min(tmpl_vis))
+        tmpl_vis /= np.max(tmpl_vis)
+        tmpl_vis *= 255
+        tmpl_vis = np.round(tmpl_vis)
+        tmpl_vis = np.astype(tmpl_vis, np.uint8)
+        self._debug_windows[self._options.debug_features_window_name].frame = tmpl_vis
+    
+    def get_debug_windows(self):
+        return list(self._debug_windows.values())

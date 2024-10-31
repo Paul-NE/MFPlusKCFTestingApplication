@@ -59,3 +59,4 @@ class VideoTest:
         while self._main_iteration():
             self._logger.info(f"Running frame {self._video_capture.get(cv2.CAP_PROP_POS_FRAMES)}")
         self._logger.info(f"Video '{self._video_path}' ended")
+        cv2.destroyAllWindows()
