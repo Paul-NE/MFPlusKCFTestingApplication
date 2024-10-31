@@ -5,7 +5,6 @@ Testimg app for checking Median Flow and Correlation trackers for their`s abilit
 
 <h2 align="center">Demo</h2>
 
-<style>
 figure {
   padding: 4px;
   margin: auto;
@@ -17,7 +16,6 @@ figcaption {
   padding: 2px;
   text-align: center;
 }
-</style>
 
 <figure align="center">
   <img src="static/video_origin.png" />
