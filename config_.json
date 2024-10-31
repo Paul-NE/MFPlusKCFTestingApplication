@@ -3,10 +3,10 @@
         "wait_key_value": 1,
         "start_paused_value": true,
         "manual_roi_selection": true,
-        "skip_first_n_frames": 2900
+        "skip_first_n_frames": 2000
     },
     "components": {
-        "write_video": true,
+        "write_video": false,
         "scale": true
     },
     "corellation_tracker": {
