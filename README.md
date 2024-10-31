@@ -4,6 +4,7 @@ Median Flow scaler for Correlation tracker
 Testimg app for checking Median Flow and Correlation trackers for their`s abilities and limitations
 
 <h2 align="center">Demo</h2>
+
 <style>
 figure {
   padding: 4px;
@@ -17,6 +18,7 @@ figcaption {
   text-align: center;
 }
 </style>
+
 <figure align="center">
   <img src="static/video_origin.png" />
   <figcaption>Original video</figcaption>
