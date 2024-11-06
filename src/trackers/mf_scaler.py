@@ -130,7 +130,7 @@ class MFScaler(Scaler):
             raise NotInited(f"Must be inited first")
         
         # sample points inside the bounding box
-        previous_pts = self._pts_gener.gen(current_box)
+        previous_pts = self._pts_gener.gen(current_box, image)
         previous_pts, current_pts, backward_pts = self._flow_generator.get_flow(self._prev_image, current_image=image, previous_pts=previous_pts)
         p0, p1 = self.filter(previous_pts, current_pts, backward_pts)
         

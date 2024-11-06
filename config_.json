@@ -1,17 +1,20 @@
 {
     "frame_processor_options": {
-        "wait_key_value": 1,
+        "wait_key_value": 0,
         "start_paused_value": true,
         "manual_roi_selection": true,
-        "skip_first_n_frames": 2000
+        "skip_first_n_frames": 0
     },
     "components": {
         "write_video": false,
         "scale": true
     },
     "corellation_tracker": {
-        "retrain_on_adjust": true,
-        "retrain_on_update": false,
-        "debug_visualization": true
+        "math_parameters": {},
+        "options": {
+            "retrain_on_adjust": true,
+            "retrain_on_update": false,
+            "debug_visualization": true
+        }
     }
 }

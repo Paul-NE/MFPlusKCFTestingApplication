@@ -13,7 +13,7 @@ class RandomPtsGenerator(PtsGenerator):
     def __init__(self, n_samples=100):
         self._n_samples = n_samples
     
-    def gen(self, bb: BoundingBox) -> PointsArray:
+    def gen(self, bb: BoundingBox, _: np.ndarray = None) -> PointsArray:
         p0 = np.empty((self._n_samples, 2))
         p0[:, 0] = np.random.randint(bb[0], bb[2] + 1, self._n_samples)
         p0[:, 1] = np.random.randint(bb[1], bb[3] + 1, self._n_samples)

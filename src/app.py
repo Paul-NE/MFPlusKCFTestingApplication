@@ -20,6 +20,7 @@ from trackers.kcf.corellation_tracker import CorellationTracker
 from generators.smart_grid_pts_generator import SmartGridPtsGenerator
 from generators.grid_pts_generator import GridPtsGenerator
 from generators.pts_generator import PtsGenerator
+from generators.fast_pts_generator import FastPtsGenerator
 from video_processors.webm_video_writer import WebmVideoWriter
 from video_processors.video_test import VideoTest
 from video_processors.process_universal import FrameProcessorUni
@@ -31,7 +32,8 @@ def init_median_flow_scaler(config_options:dict) -> MFScaler:
     if not config_options["components"]["scale"]:
         return
     
-    pts_gener = SmartGridPtsGenerator(config._points_density)
+    # pts_gener = SmartGridPtsGenerator(config._points_density)
+    pts_gener = FastPtsGenerator()
     fb_flow_generator = ForwardBachkwardFlow(config._flow_generator)
     fb_filter = ForwardBackwardPntFilter(config._max_forward_backward_error)
     
@@ -75,17 +77,18 @@ def init_kcf(config_options: dict):
 def init_corellation(config_options: dict):
     configs = config_options["corellation_tracker"]
     options = CorellationTracker.Options(
-        *configs)
-    return CorellationTracker(options=options)
+        *configs["options"])
+    math_params = CorellationTracker.MathParameters(*configs["math_parameters"])
+    return CorellationTracker(
+        math_parameters=math_params,
+        options=options
+        )
 
 def main(test_folder_path: Path, config_options: dict):
     video_path = test_folder_path / config._video_name
     video_test_options = VideoTest.Options()
     frame_process_options = FrameProcessorUni.Options(
-        skip_first_n_frames = config_options["frame_processor_options"]["skip_first_n_frames"], 
-        wait_key_value = config_options["frame_processor_options"]["wait_key_value"], 
-        manual_roi_selection = config_options["frame_processor_options"]["manual_roi_selection"], 
-        start_paused_value = config_options["frame_processor_options"]["start_paused_value"]
+        **config_options["frame_processor_options"]
         )
 
     _annotation_path = test_folder_path / config._annotation_name

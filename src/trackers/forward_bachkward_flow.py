@@ -27,6 +27,7 @@ class ForwardBachkwardFlow:
         Returns:
             _type_: _description_
         """
+        print(f"{previous_pts}")
         current_points, state, _ = self._pts_tracking_func(previous_image, current_image, previous_pts)
         current_points = PointsArray(current_points)
         indx = np.where(state == 1)[0]

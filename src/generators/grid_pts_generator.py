@@ -12,7 +12,7 @@ from geometry import BoundingBox, PointsArray
 class GridPtsGenerator(PtsGenerator):
     def __init__(self, step=5) -> None:
         self._step = step
-    def gen(self, bb: BoundingBox) -> PointsArray:
+    def gen(self, bb: BoundingBox, _: np.ndarray = None) -> PointsArray:
         px = list(range(int(bb.top_left_pnt.x + 0.5), 
                         int(bb.bottom_right_pnt.x + 0.5) + 1, 
                         self._step))

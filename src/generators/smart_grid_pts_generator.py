@@ -12,7 +12,7 @@ from geometry import BoundingBox, PointsArray
 class SmartGridPtsGenerator(PtsGenerator):
     def __init__(self, side_points:int=10) -> None:
         self._side_points = side_points
-    def gen(self, bb: BoundingBox) -> PointsArray:
+    def gen(self, bb: BoundingBox, _: np.ndarray = None) -> PointsArray:
         w_step = int(bb.width // self._side_points)
         h_step = int(bb.height // self._side_points)
         w_step = max(w_step, 1)

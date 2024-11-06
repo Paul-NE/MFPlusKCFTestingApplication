@@ -55,13 +55,16 @@ class SettingsWindow(QtWidgets.QDialog):
         hbox = QtWidgets.QHBoxLayout()
         label = QtWidgets.QLabel(f"{key}:")
         spinbox = QtWidgets.QSpinBox()
+        spinbox.setRange(0, 10000)
         spinbox.setValue(value)
-        spinbox.setMaximum(10000)  # Adjust max as needed
         hbox.addWidget(label)
         hbox.addWidget(spinbox)
         parent_layout.addRow(hbox)
         inputs_ref[key] = spinbox  # Store widget reference
 
+    def create_float_form(self, parent_layout, inputs_ref, key, value):
+        pass
+    
     def create_str_form(self, parent_layout, inputs_ref, key, value):
         # Create a line edit for string values
         label = QtWidgets.QLabel(f"{key}:")
@@ -76,6 +79,7 @@ class SettingsWindow(QtWidgets.QDialog):
             "dict": self.create_dict_form,
             "bool": self.create_bool_form,
             "int": self.create_int_form,
+            "float": self.create_float_form,
             "str": self.create_str_form,
             "NoneType": self.create_str_form,
             "list": self.create_str_form
