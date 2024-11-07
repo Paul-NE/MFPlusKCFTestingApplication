@@ -6,25 +6,30 @@ if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
 import config
-from video_processors.video_test import VideoTest
 from marks.marks import *
 from analytic_tools.annotation_light import AnnotationLight
 from analytic_tools.nullable_annotation import NullableAnnotation
 from analytic_tools.ious import IOUs
+
 from trackers.forward_backward_pnt_filter import ForwardBackwardPntFilter
 from trackers.forward_bachkward_flow import ForwardBachkwardFlow
 from trackers.median_flow_tracker import MedianFlowTracker
 from trackers.mf_scaler import MFScaler
 from trackers.mf_motion_only import MFMotionOnly
 from trackers.kcf.corellation_tracker import CorellationTracker
+from trackers.kcf.kcf import *
+from trackers.scale_estimators import estimate_by_affine, scale_by_all_distances
+
 from generators.smart_grid_pts_generator import SmartGridPtsGenerator
 from generators.grid_pts_generator import GridPtsGenerator
 from generators.pts_generator import PtsGenerator
 from generators.fast_pts_generator import FastPtsGenerator
+
+from video_processors.video_test import VideoTest
 from video_processors.webm_video_writer import WebmVideoWriter
 from video_processors.video_test import VideoTest
 from video_processors.process_universal import FrameProcessorUni
-from trackers.kcf.kcf import *
+
 from app_gui.utils import load_json
 
 
@@ -36,18 +41,18 @@ def init_median_flow_scaler(config_options:dict) -> MFScaler:
     pts_gener = FastPtsGenerator()
     fb_flow_generator = ForwardBachkwardFlow(config._flow_generator)
     fb_filter = ForwardBackwardPntFilter(config._max_forward_backward_error)
+    scale_estimator = estimate_by_affine
     
     options =MFScaler.Options(debug_visualization=True) 
     scaler = MFScaler(
         pts_gener,
         fb_filter,
         fb_flow_generator,
-        options
+        scale_estimator,
+        options=options,
     )
     return scaler
 
-# 2024-10-30 16:17:08,090 - VideoTest - INFO - Running frame 100.0
-# 2024-10-30 16:17:08,090 - CorellationTracker - INFO - Inited. Current roi: BoundingBox(top_left_pnt=Point(x=np.int16(187), y=np.int16(227)), bottom_right_pnt=Point(x=np.int16(234), y=np.int16(259)))
 def init_kcf(config_options: dict):
     debug = KCFDebugParams(
         showFeatures=False, 

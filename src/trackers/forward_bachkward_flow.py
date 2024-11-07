@@ -1,4 +1,6 @@
 from typing import Callable
+import logging
+
 import numpy as np
 
 from geometry import PointsArray
@@ -10,6 +12,7 @@ class ForwardBachkwardFlow:
             pts_tracking_func:Callable[[np.ndarray, np.ndarray, PointsArray], tuple[np.ndarray, np.ndarray, np.ndarray]]
         ):
         self._pts_tracking_func = pts_tracking_func
+        self._logger = logging.getLogger(f"{self.__class__.__name__}")
     
     def _forward(
             self, 
@@ -27,7 +30,10 @@ class ForwardBachkwardFlow:
         Returns:
             _type_: _description_
         """
-        print(f"{previous_pts}")
+        self._logger.info(f"{previous_pts=}")
+        self._logger.info(f"{previous_image.shape=}")
+        self._logger.info(f"{current_image.shape=}")
+        
         current_points, state, _ = self._pts_tracking_func(previous_image, current_image, previous_pts)
         current_points = PointsArray(current_points)
         indx = np.where(state == 1)[0]

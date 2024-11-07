@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from typing import Callable
 import logging
 
 import numpy as np
+import cv2
 
 from marks.marks import ImageMarks, Vector
 from video_processors.window_manager import Window
@@ -14,6 +16,11 @@ from .forward_backward_pnt_filter import ForwardBackwardPntFilter
 from .scaler import Scaler
 from .errors import NotInited
 
+def _estimate_scale(previous_points: PointsArray, current_points: PointsArray) -> float:
+    previous_points_distances = distances_between_all_points(previous_points)
+    current_points_distances = distances_between_all_points(current_points)
+    ds = np.sqrt(np.median(current_points_distances / (previous_points_distances + 2**-23)))
+    return ds
 
 class MFScaler(Scaler):
     """Object tracker based on optical flow
@@ -30,6 +37,8 @@ class MFScaler(Scaler):
             pts_gener:PtsGenerator, 
             fb_filter:ForwardBackwardPntFilter, 
             fb_flow_generator:ForwardBachkwardFlow,
+            scale_estimator: Callable[[PointsArray, PointsArray], float],
+            min_keypoints_number: int = 10,
             options:Options|None=None
         ):
         self._debug_windows:dict[str, Window] = {}
@@ -40,6 +49,8 @@ class MFScaler(Scaler):
         self._pts_gener: PtsGenerator = pts_gener
         self._fb_filter: ForwardBackwardPntFilter = fb_filter
         self._flow_generator: ForwardBachkwardFlow = fb_flow_generator
+        self._estimate_scale = scale_estimator
+        self._min_keypoint = min_keypoints_number
         
         self._options = options if options is not None else self.Options()
         if self._options.debug_visualization:
@@ -66,20 +77,14 @@ class MFScaler(Scaler):
                 )
             )
     
-    def estimate_scale(self, previous_points: PointsArray, current_points: PointsArray) -> float:
-        previous_points_distances = distances_between_all_points(previous_points)
-        current_points_distances = distances_between_all_points(current_points)
-        ds = np.sqrt(np.median(current_points_distances / (previous_points_distances + 2**-23)))
-        return ds
-    
     def init(self, image:np.ndarray, box:BoundingBox):
         self._prev_image = image
         if isinstance(box, list) or isinstance(box, tuple):
             box = BoundingBox.generate_from_list(box)
         self._inited = not self._inited
     
-    def estimate_box_change(self, p0, p1, current_box: BoundingBox):
-        ds = self.estimate_scale(p0, p1)
+    def _estimate_box_change(self, p0, p1, current_box: BoundingBox):
+        ds = self._estimate_scale(p0, p1)
 
         # update bounding box
         dx_scale = (ds - 1.0) * current_box.width / 2
@@ -87,7 +92,7 @@ class MFScaler(Scaler):
         
         return dx_scale, dy_scale
     
-    def filter(self, previous_pts:PointsArray, current_pts:PointsArray, backward_pts:PointsArray) -> tuple[PointsArray, PointsArray]:
+    def _filter(self, previous_pts:PointsArray, current_pts:PointsArray, backward_pts:PointsArray) -> tuple[PointsArray, PointsArray]:
         # check forward-backward error and min number of points
         p0_bad, p1_bad, p0r_bad = self._fb_filter.filter_bad(
             previous_pnts=previous_pts,
@@ -131,15 +136,18 @@ class MFScaler(Scaler):
         
         # sample points inside the bounding box
         previous_pts = self._pts_gener.gen(current_box, image)
-        previous_pts, current_pts, backward_pts = self._flow_generator.get_flow(self._prev_image, current_image=image, previous_pts=previous_pts)
-        p0, p1 = self.filter(previous_pts, current_pts, backward_pts)
+        try:
+            previous_pts, current_pts, backward_pts = self._flow_generator.get_flow(self._prev_image, current_image=image, previous_pts=previous_pts)
+        except cv2.error as e:
+            self._logger.warning(f"Cv2 error code {e.code}. Could not generate flow")
+            return None
+        p0, p1 = self._filter(previous_pts, current_pts, backward_pts)
         
-        # can't work with les then 2 points
-        # It looks for distance between each 2 points
-        if len(p0) < 2:
+        if len(p0) < self._min_keypoint:
+            self._logger("Not enought ponts! Returning none")
             return None
         
-        dx_scale, dy_scale = self.estimate_box_change(p0, p1, current_box)
+        dx_scale, dy_scale = self._estimate_box_change(p0, p1, current_box)
         bb_new = self.form_new_box(current_box, dx_scale, dy_scale)
         
         crop_out_of_frame_box(bb_new, image.shape)
