@@ -28,4 +28,6 @@ def estimate_by_affine(previous_points: PointsArray, current_points: PointsArray
     s_y = np.sqrt(matrix[0,1]**2 + matrix[1,1]**2)
     s = (s_x+s_y) / 2
     _scale_logger.info(f"{f_name}: {s_x=:.3f}, {s_y=:.3f}, {s=:.3f}")
+    print(f"{matrix=}")
+    print(f"{f_name}: {s_x=:.3f}, {s_y=:.3f}, {s=:.3f}")
     return s

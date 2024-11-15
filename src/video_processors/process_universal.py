@@ -190,6 +190,7 @@ class FrameProcessorUni:
             annotation:AnnotationLight|None=None, 
             video_writer:WebmVideoWriter|None=None, 
             windows_to_show:list[Window]|None=None,
+            analytics_engine: IOUs|None = None,
             options:Options=None
             ) -> None:
         
@@ -199,6 +200,7 @@ class FrameProcessorUni:
         
         self._marker = MarkerManager(ImageMarks())
         self._video_writer = video_writer
+        self._analytics_engine = analytics_engine
         self._tracker = TrackerScaleManager(tracker, scaler)
         self._annotation = AnnotationManager(annotation) if annotation is not None else None
         
@@ -266,14 +268,15 @@ class FrameProcessorUni:
             return
         scaler_box, tracker_box = self._tracker.update(message, None)
         self._marker.add_box(scaler_box, (0, 255, 0))
-        self._marker.add_box(tracker_box)
     
     def _annotated_run(self, message: VideoTest.Message) -> bool:
         annotation_box = self._annotation.update(message) if self._annotation is not None else None
         scaler_box, tracker_box = self._tracker.update(message, annotation_box)
-        self._marker.add_box(annotation_box, (255, 0, 0))
+        
+        if annotation_box and scaler_box: self._analytics_engine.iou_append(annotation_box, scaler_box)
+        self._marker.add_box(annotation_box, (255, 0, 255))
         self._marker.add_box(scaler_box, (0, 255, 0))
-        self._marker.add_box(tracker_box)
+        # self._marker.add_box(tracker_box)
     
     def __call__(self, message: VideoTest.Message) -> bool:
         """One itteration of video process

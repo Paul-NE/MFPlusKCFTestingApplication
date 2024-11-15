@@ -16,11 +16,6 @@ from .forward_backward_pnt_filter import ForwardBackwardPntFilter
 from .scaler import Scaler
 from .errors import NotInited
 
-def _estimate_scale(previous_points: PointsArray, current_points: PointsArray) -> float:
-    previous_points_distances = distances_between_all_points(previous_points)
-    current_points_distances = distances_between_all_points(current_points)
-    ds = np.sqrt(np.median(current_points_distances / (previous_points_distances + 2**-23)))
-    return ds
 
 class MFScaler(Scaler):
     """Object tracker based on optical flow
@@ -38,7 +33,7 @@ class MFScaler(Scaler):
             fb_filter:ForwardBackwardPntFilter, 
             fb_flow_generator:ForwardBachkwardFlow,
             scale_estimator: Callable[[PointsArray, PointsArray], float],
-            min_keypoints_number: int = 10,
+            min_keypoints_number: int = 5,
             options:Options|None=None
         ):
         self._debug_windows:dict[str, Window] = {}
@@ -136,6 +131,10 @@ class MFScaler(Scaler):
         
         # sample points inside the bounding box
         previous_pts = self._pts_gener.gen(current_box, image)
+        if previous_pts is None or previous_pts.shape[0]==0:
+            self._logger.warning(f"No points generated! {previous_pts}")
+            return None
+        
         try:
             previous_pts, current_pts, backward_pts = self._flow_generator.get_flow(self._prev_image, current_image=image, previous_pts=previous_pts)
         except cv2.error as e:
@@ -144,7 +143,7 @@ class MFScaler(Scaler):
         p0, p1 = self._filter(previous_pts, current_pts, backward_pts)
         
         if len(p0) < self._min_keypoint:
-            self._logger("Not enought ponts! Returning none")
+            self._logger.info("Not enought ponts! Returning none")
             return None
         
         dx_scale, dy_scale = self._estimate_box_change(p0, p1, current_box)

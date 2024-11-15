@@ -8,7 +8,6 @@ from app_gui.video_test_gui import VideoTestGUI
 from app import main
 
 
-
 if __name__ == "__main__":
     # Create the application object
     app = QtWidgets.QApplication(sys.argv)

@@ -1,13 +1,16 @@
 {
     "frame_processor_options": {
-        "wait_key_value": 0,
-        "start_paused_value": true,
-        "manual_roi_selection": true,
+        "wait_key_value": 50,
+        "start_paused_value": false,
+        "manual_roi_selection": false,
         "skip_first_n_frames": 0
     },
     "components": {
         "write_video": false,
         "scale": true
+    },
+    "annotation": {
+        "process": true
     },
     "corellation_tracker": {
         "math_parameters": {},
@@ -15,6 +18,20 @@
             "retrain_on_adjust": true,
             "retrain_on_update": false,
             "debug_visualization": true
+        }
+    },
+    "median_flow_methods": {
+        "scale_estimator": {
+            "scale_by_all_distances": false,
+            "estimate_by_affine": true
+        },
+        "points_generator": {
+            "limit_by_ellipse": true,
+            "algorithm": {
+                "fast_pts_generator": true,
+                "smart_grid_pts_generator": false,
+                "shi_tomasi_generator": false
+            }
         }
     }
 }

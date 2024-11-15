@@ -1,6 +1,9 @@
+from geometry import BoundingBox
+
+
 class IOUs(list):
-    def iou_append(self, bbox1, bbox2):
-        self.append(self.get_iou(bbox1, bbox2))
+    def iou_append(self, bbox1: BoundingBox, bbox2: BoundingBox):
+        self.append(self.get_iou(list(bbox1), list(bbox2)))
     
     @property
     def avarage(self):

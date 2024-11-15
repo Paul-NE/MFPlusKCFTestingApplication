@@ -1,7 +1,8 @@
 import os
 import sys
-from typing import Callable
+import subprocess
 from pathlib import Path
+from typing import Callable
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
@@ -47,6 +48,8 @@ class VideoTestGUI(QtWidgets.QMainWindow):
     def run_video(self):
         settings = load_json(self._video_test_settings_path)
         self._worker(self._video_folder_path, settings)
+        # subprocess().call()
+        
 
     def create_label(self, layout):
         """Create and add a label to the layout."""
