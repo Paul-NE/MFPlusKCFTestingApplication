@@ -70,6 +70,10 @@ class VideoTest:
     def window(self, win):
         self._options.window = win
     
+    @property
+    def capoture(self):
+        return self._video_capture
+    
     def _form_message(self, image):
         return self.Message(
             video_path = self._video_path,

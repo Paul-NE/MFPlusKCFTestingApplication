@@ -1,6 +1,6 @@
 {
     "frame_processor_options": {
-        "wait_key_value": 50,
+        "wait_key_value": 1,
         "start_paused_value": false,
         "manual_roi_selection": false,
         "skip_first_n_frames": 0
@@ -10,7 +10,8 @@
         "scale": true
     },
     "annotation": {
-        "process": true
+        "process": true,
+        "json": true
     },
     "corellation_tracker": {
         "math_parameters": {},
@@ -20,6 +21,10 @@
             "debug_visualization": true
         }
     },
+    "tracking_option": {
+        "corellation": false,
+        "annotation": true
+    },
     "median_flow_methods": {
         "scale_estimator": {
             "scale_by_all_distances": false,
@@ -28,8 +33,8 @@
         "points_generator": {
             "limit_by_ellipse": true,
             "algorithm": {
-                "fast_pts_generator": true,
-                "smart_grid_pts_generator": false,
+                "fast_pts_generator": false,
+                "smart_grid_pts_generator": true,
                 "shi_tomasi_generator": false
             }
         }

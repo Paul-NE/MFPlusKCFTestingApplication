@@ -8,6 +8,7 @@ if parent_dir not in sys.path:
 
 from analytic_tools.nullable_annotation import NullableAnnotation
 from analytic_tools.annotation_light import AnnotationLight
+from analytic_tools.annotation_json import AnnotationJson
 from analytic_tools.ious import IOUs
 from marks.marks import *
 import config
@@ -155,13 +156,18 @@ def main(test_folder_path: Path, config_options: dict):
     _analytics_engine = IOUs()
     
     scaler = init_median_flow_scaler(config_options)
-    corellation_tracker = init_corellation(config_options)
     scaler_windows = scaler.get_debug_windows()
-    tracker_windows = corellation_tracker.get_debug_windows()
+    
+    tracker = None
+    tracker_windows = []
+    if config_options["tracking_option"]["corellation"]:
+        tracker = init_corellation(config_options)
+        tracker_windows = tracker.get_debug_windows()
+    
     windows = scaler_windows + tracker_windows
 
     operation = FrameProcessorUni(
-        tracker=corellation_tracker,
+        tracker=tracker,
         scaler=scaler,
         annotation=annotation, 
         options=frame_process_options,
@@ -170,12 +176,23 @@ def main(test_folder_path: Path, config_options: dict):
         analytics_engine=_analytics_engine
         )
     
-    VideoTest(
+    v_test = VideoTest(
         video=video_path, 
         operation=operation,
         options=video_test_options
-    ).run()
+    )
     
+    cap = v_test.capoture
+    annot_json_path = test_folder_path / "test.json"
+    if config_options["annotation"]["process"] and config_options["annotation"]["json"]:
+        try:
+            annot_json = AnnotationJson(annot_json_path, cap)
+            annot_json.selected_object = 3
+            operation.set_annotation_json(annot_json)
+        except FileNotFoundError as e:
+            app_logger.warning(f"{e.strerror} {annot_json_path}")
+    
+    v_test.run()
     print(_analytics_engine.avarage)
     
     if video_writer is not None:
@@ -188,6 +205,10 @@ if __name__ == "__main__":
     # video_path = sys.argv[0]
     # main(video_path, params)
     # main(Path(r"/home/poul/temp/Vids/annotated/dirtroad_06"), params)
+    # main(Path(r"/home/poul/temp/Vids/annotated/Highway"), params)
+    # main(Path(r"/home/poul/temp/rotate_street_vid_2"), params)
+    # main(Path(r"/home/poul/temp/vid_6_1"), params)
+    main(Path(r"/home/poul/temp/Vids/annotated/New/rotate_street_vid_2"), params)
     # main(Path(r"/home/poul/temp/Vids/annotated/StreetVid_4"), params)
     # main(Path(r"/home/poul/temp/Vids/annotated/vid_15_1"), params)
     # main(Path(r"/home/poul/temp/Vids/annotated/rotate_street_vid_1"), params)

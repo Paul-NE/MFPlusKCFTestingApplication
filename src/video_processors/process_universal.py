@@ -6,6 +6,7 @@ import cv2
 
 from marks.marks import *
 from analytic_tools.annotation_light import AnnotationLight
+from analytic_tools.annotation_json import AnnotationJson
 from analytic_tools.ious import IOUs
 from trackers.scaler import Scaler
 from trackers.tracker import AdjustableTracker
@@ -75,7 +76,6 @@ class ManualROISelector:
     def dragging(self):
         return self.drag_rect is not None
 
-
 class AnnotationManager:
     def __init__(self, annotation:AnnotationLight):
         self._annotation = annotation
@@ -99,11 +99,21 @@ class AnnotationManager:
             while True:
                 return None
 
+class AnnotationJsonManager:
+    def __init__(self, annotation:AnnotationJson):
+        self._annotation = annotation
+    
+    def update(self, message: VideoTest.Message) -> BoundingBox:
+        annotation = self._annotation.get_current_box()
+        return BoundingBox.generate_from_list(annotation) if annotation is not None else None
+
 
 class TrackerScaleManager:
-    def __init__(self, tracker:AdjustableTracker, scaler: Scaler|None):
+    def __init__(self, tracker:AdjustableTracker|None, scaler: Scaler|None):
+        assert tracker is not None or scaler is not None
         self._tracker = tracker
         self._scaler = scaler
+        self._width_height_buffer: list[float, float]|None = None
     
     def init(self, message: VideoTest.Message, ground_true: BoundingBox) -> BoundingBox:
         """Forced initialization, not recommended to use
@@ -116,13 +126,14 @@ class TrackerScaleManager:
             BoundingBox: _description_
         """
         assert ground_true is not None
+        assert self._tracker is not None
         self._tracker.init(message.image, ground_true)
         if self._scaler is not None:
             self._scaler.init(message.image, ground_true)
         
         return None, None
     
-    def update(self, message: VideoTest.Message, annotation: BoundingBox|None=None) -> BoundingBox:
+    def _tracker_update(self, message: VideoTest.Message, annotation: BoundingBox|None=None) -> BoundingBox:
         try:
             tracker_result = self._tracker.update(message.image)
             if self._scaler is None:
@@ -143,6 +154,40 @@ class TrackerScaleManager:
                 return None, None
             self._scaler.init(message.image, annotation)
             return None, None
+    
+    def _no_tracker_update(self, message: VideoTest.Message, annotation: BoundingBox|None=None) -> BoundingBox:
+        try:
+            if not annotation:
+                return None, None
+            if self._width_height_buffer is None:
+                raise NotInited
+            
+            center = annotation.center
+            annotation_old_scale = BoundingBox(
+                top_left_pnt=Point(
+                    x = center.x - self._width_height_buffer[0]/2,
+                    y = center.y - self._width_height_buffer[1]/2,
+                ),
+                bottom_right_pnt=Point(
+                    x = center.x + self._width_height_buffer[0]/2,
+                    y = center.y + self._width_height_buffer[1]/2,
+                )
+            )
+            scaler_result = self._scaler.update(message.image, annotation_old_scale)
+            self._width_height_buffer = [scaler_result.width, scaler_result.height]
+            if scaler_result is not None:
+                return scaler_result, annotation_old_scale
+            
+            return None, None
+        except NotInited:
+            self._scaler.init(message.image, annotation)
+            self._width_height_buffer = [annotation.width, annotation.height]
+            return None, None
+    
+    def update(self, message: VideoTest.Message, annotation: BoundingBox|None=None) -> BoundingBox:
+        if self._tracker:
+            return self._tracker_update(message, annotation)
+        return self._no_tracker_update(message, annotation)
 
 
 class AnalyticsManager:
@@ -185,8 +230,8 @@ class FrameProcessorUni:
     
     def __init__(
             self, 
-            tracker:AdjustableTracker, 
-            scaler:Scaler, 
+            tracker:AdjustableTracker|None=None, 
+            scaler:Scaler|None = None, 
             annotation:AnnotationLight|None=None, 
             video_writer:WebmVideoWriter|None=None, 
             windows_to_show:list[Window]|None=None,
@@ -206,6 +251,9 @@ class FrameProcessorUni:
         
         self._options = options if options is not None else self.Options()
         self._setup()
+    
+    def set_annotation_json(self, annotation:AnnotationJson|None=None):
+        self._annotation = AnnotationJsonManager(annotation)
     
     def _setip_window_manager(self, windows_to_show:list[Window]|None) -> None:
         if windows_to_show is None:
