@@ -76,6 +76,12 @@ class ManualROISelector:
     def dragging(self):
         return self.drag_rect is not None
 
+
+class AnnotationStop(Exception):
+    """No further annotation"""
+    pass
+
+
 class AnnotationManager:
     def __init__(self, annotation:AnnotationLight):
         self._annotation = annotation
@@ -99,11 +105,25 @@ class AnnotationManager:
             while True:
                 return None
 
+
 class AnnotationJsonManager:
-    def __init__(self, annotation:AnnotationJson):
+    @dataclass
+    class Options:
+        skip_to_first_annotated: bool = True
+        
+    def __init__(self, annotation:AnnotationJson, options:Options=None):
         self._annotation = annotation
+        self._last_idex = annotation.get_last_frame_index()
+        self._first_index = annotation.get_first_frame_index()
+        self._options = options if options is not None else self.Options()
     
     def update(self, message: VideoTest.Message) -> BoundingBox:
+        cur_frame = message.video_capture.get(cv2.CAP_PROP_POS_FRAMES)
+        if cur_frame > self._last_idex:
+            raise AnnotationStop
+        if self._options.skip_to_first_annotated and cur_frame < self._first_index:
+            message.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self._first_index - 1)
+            return None
         annotation = self._annotation.get_current_box()
         return BoundingBox.generate_from_list(annotation) if annotation is not None else None
 
@@ -114,6 +134,20 @@ class TrackerScaleManager:
         self._tracker = tracker
         self._scaler = scaler
         self._width_height_buffer: list[float, float]|None = None
+        self._px_border = 5
+    
+    def _validate_annotation_box(self, message: VideoTest.Message, box: BoundingBox) -> bool:
+        w_max = message.video_capture.get(cv2.CAP_PROP_FRAME_WIDTH) - 1
+        h_max = message.video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT) - 1
+        if box.top_left_pnt.x < self._px_border:
+            return False
+        if box.top_left_pnt.y < self._px_border:
+            return False
+        if box.bottom_right_pnt.x > w_max - self._px_border:
+            return False
+        if box.bottom_right_pnt.y > h_max - self._px_border:
+            return False
+        return True
     
     def init(self, message: VideoTest.Message, ground_true: BoundingBox) -> BoundingBox:
         """Forced initialization, not recommended to use
@@ -127,6 +161,9 @@ class TrackerScaleManager:
         """
         assert ground_true is not None
         assert self._tracker is not None
+        if not self._validate_annotation_box(message, ground_true):
+            return None, None
+        
         self._tracker.init(message.image, ground_true)
         if self._scaler is not None:
             self._scaler.init(message.image, ground_true)
@@ -174,9 +211,10 @@ class TrackerScaleManager:
                 )
             )
             scaler_result = self._scaler.update(message.image, annotation_old_scale)
+            if scaler_result is None:
+                return None, None
             self._width_height_buffer = [scaler_result.width, scaler_result.height]
-            if scaler_result is not None:
-                return scaler_result, annotation_old_scale
+            return scaler_result, annotation_old_scale
             
             return None, None
         except NotInited:
@@ -318,7 +356,11 @@ class FrameProcessorUni:
         self._marker.add_box(scaler_box, (0, 255, 0))
     
     def _annotated_run(self, message: VideoTest.Message) -> bool:
-        annotation_box = self._annotation.update(message) if self._annotation is not None else None
+        try:
+            annotation_box = self._annotation.update(message) if self._annotation is not None else None
+        except AnnotationStop:
+            annotation_box = None
+            self._keep_running = False
         scaler_box, tracker_box = self._tracker.update(message, annotation_box)
         
         if annotation_box and scaler_box: self._analytics_engine.iou_append(annotation_box, scaler_box)

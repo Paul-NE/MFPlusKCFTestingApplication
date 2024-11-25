@@ -6,9 +6,13 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
+from openpyxl import Workbook
+import pandas as pd
+
+from app_gui.object_selector import get_number
 from analytic_tools.nullable_annotation import NullableAnnotation
 from analytic_tools.annotation_light import AnnotationLight
-from analytic_tools.annotation_json import AnnotationJson
+from analytic_tools.annotation_json import AnnotationJson, NoSuchObjectFound
 from analytic_tools.ious import IOUs
 from marks.marks import *
 import config
@@ -87,7 +91,7 @@ def _init_points_generator(config_options:dict):
         return limit_pts_generator(functions[choise]())
     return functions[choise]()
 
-def init_median_flow_scaler(config_options:dict) -> MFScaler:
+def _init_median_flow_scaler(config_options:dict) -> MFScaler:
     if not config_options["components"]["scale"]:
         return
     # pts_gener = SmartGridPtsGenerator(config._points_density)
@@ -132,7 +136,7 @@ def init_kcf(config_options: dict):
     params = KCFParams(flags=flags, hog=hog, debug=debug, train=train_params)
     return KCFTrackerNormal(params)
 
-def init_corellation(config_options: dict):
+def _init_corellation(config_options: dict):
     configs = config_options["corellation_tracker"]
     options = CorellationTracker.Options(
         *configs["options"])
@@ -142,7 +146,7 @@ def init_corellation(config_options: dict):
         options=options
         )
 
-def main(test_folder_path: Path, config_options: dict):
+def post_main(test_folder_path: Path, config_options: dict):
     video_path = test_folder_path / config._video_name
     video_test_options = VideoTest.Options(process_video_options=True)
     frame_process_options = FrameProcessorUni.Options(
@@ -155,13 +159,13 @@ def main(test_folder_path: Path, config_options: dict):
     video_writer = WebmVideoWriter(config._test_results_write_path) if config_options["components"]["write_video"] else None
     _analytics_engine = IOUs()
     
-    scaler = init_median_flow_scaler(config_options)
+    scaler = _init_median_flow_scaler(config_options)
     scaler_windows = scaler.get_debug_windows()
     
     tracker = None
     tracker_windows = []
     if config_options["tracking_option"]["corellation"]:
-        tracker = init_corellation(config_options)
+        tracker = _init_corellation(config_options)
         tracker_windows = tracker.get_debug_windows()
     
     windows = scaler_windows + tracker_windows
@@ -186,33 +190,72 @@ def main(test_folder_path: Path, config_options: dict):
     annot_json_path = test_folder_path / "test.json"
     if config_options["annotation"]["process"] and config_options["annotation"]["json"]:
         try:
+            json_options = config_options["json_annotation"]
             annot_json = AnnotationJson(annot_json_path, cap)
-            annot_json.selected_object = 3
+            
+            if json_options["selection"]["preselected"]:
+                obj_number = json_options["selected_obj"]
+            elif json_options["selection"]["object_selector"]:
+                obj_number = get_number(0, annot_json.objects)
+            else:
+                raise ValueError('Wrong json option "selection"')
+            annot_json.selected_object = obj_number
+            
             operation.set_annotation_json(annot_json)
         except FileNotFoundError as e:
             app_logger.warning(f"{e.strerror} {annot_json_path}")
     
     v_test.run()
-    print(_analytics_engine.avarage)
     
     if video_writer is not None:
         video_writer.release()
+    
+    return _analytics_engine
+
+def main(test_folder_path: Path, config_options: dict):
+    columns = ["Video", "Obj_id", "IOU", "Samples"]
+    df = pd.DataFrame(columns=columns)
+    # Process all annotated objects one by one untill get an error
+    annotation_index = 0
+    while config_options["json_annotation"]["run_all"]:
+        options = config_options.copy()
+        options["json_annotation"]["selection"]["object_selector"] = False
+        options["json_annotation"]["selection"]["preselected"] = True
+        options["json_annotation"]["selected_obj"] = annotation_index
+        annotation_index+=1
+        try:
+            result = post_main(test_folder_path, options)
+        except NoSuchObjectFound as e:
+            app_logger.info(f"Stopped on annotation number {options["json_annotation"]["selected_obj"]}.")
+            break
+        data = {
+            "Video": test_folder_path,
+            "Obj_id": annotation_index, 
+            "IOU": result.avarage, 
+            "Samples": len(result)
+        }
+        df = pd.concat([df, pd.DataFrame([data])], ignore_index=True)
+    else:
+        post_main(test_folder_path, config_options)
+    
+    print(df)
+    print(f"{df["Samples"].sum()=}")
 
 
 if __name__ == "__main__":
     params = load_json("./config_.json")
     
-    # video_path = sys.argv[0]
-    # main(video_path, params)
-    # main(Path(r"/home/poul/temp/Vids/annotated/dirtroad_06"), params)
-    # main(Path(r"/home/poul/temp/Vids/annotated/Highway"), params)
-    # main(Path(r"/home/poul/temp/rotate_street_vid_2"), params)
-    # main(Path(r"/home/poul/temp/vid_6_1"), params)
+    main(Path(r"/home/poul/temp/Vids/annotated/New/rotate_street_vid_1"), params)
+    input()
     main(Path(r"/home/poul/temp/Vids/annotated/New/rotate_street_vid_2"), params)
-    # main(Path(r"/home/poul/temp/Vids/annotated/StreetVid_4"), params)
-    # main(Path(r"/home/poul/temp/Vids/annotated/vid_15_1"), params)
-    # main(Path(r"/home/poul/temp/Vids/annotated/rotate_street_vid_1"), params)
-    # main(Path(r"/home/poul/temp/Vids/boat/"), params)
+    input()
+    main(Path(r"/home/poul/temp/Vids/annotated/New/Street_Vid_4"), params)
+    input()
+    main(Path(r"/home/poul/temp/Vids/annotated/New/Street_Vid_5"), params)
+    input()
+    main(Path(r"/home/poul/temp/Vids/annotated/New/StreetVid_1"), params)
+    input()
+    # main(Path(r"/home/poul/temp/Vids/annotated/New/StreetVid_2"), params)
+    # input()
     
-    
-    # main(Path(r"/home/poul/temp/Vids/annotated/StreetVid_2"), params) #!!!!!!!!!!!!!!!
+    os._exit(0)

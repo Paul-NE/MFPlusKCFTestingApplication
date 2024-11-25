@@ -5,6 +5,10 @@ import numpy as np
 import cv2
 
 
+class NoSuchObjectFound(IndexError):
+    pass
+
+
 class AnnotationJson:
     def __init__(self, annotation_path: str, capture: cv2.VideoCapture):
         self._objects: list[TrackedObject] = []
@@ -17,7 +21,7 @@ class AnnotationJson:
     
     @property
     def objects(self):
-        return len(self.objects)
+        return len(self._objects)
     
     @property
     def selected_object(self) -> int:
@@ -26,7 +30,7 @@ class AnnotationJson:
     @selected_object.setter
     def selected_object(self, option: int):
         if not (0 <= option < len(self._objects)):
-            raise IndexError
+            raise NoSuchObjectFound
         self._selected_object = option
     
     def get_all_current_boxes(self):
@@ -35,6 +39,15 @@ class AnnotationJson:
     def get_current_box(self) -> tuple[int, int, int, int]|None:
         tracked_object = self._objects[self._selected_object]
         return tracked_object.get_current_annitation()
+    
+    def get_last_frame_index(self) -> int:
+        tracked_object = self._objects[self._selected_object]
+        return tracked_object.get_last_frame()
+    
+    def get_first_frame_index(self) -> int:
+        tracked_object = self._objects[self._selected_object]
+        return tracked_object.get_first_frame()
+
 
 class TrackedObject:
     def __init__(self, box_dict: dict, capture: cv2.VideoCapture):
@@ -69,7 +82,7 @@ class TrackedObject:
             }
     
     def _generate_extended_annotation(self):
-        keys = list(self._base_annotation.keys())
+        # keys = list(self._base_annotation.keys())
         self._linear_interpolation()
         # for curr_key, next_key in zip(keys[:-1], keys[1:]):
         #     if self._base_annotation[curr_key]["enabled"]:
@@ -102,7 +115,12 @@ class TrackedObject:
         if frame in self._extended_annotation:
             return self._extended_annotation[frame]
         return None
-
+    
+    def get_last_frame(self) -> int:
+        return sorted(self._base_annotation.keys())[-1]
+    
+    def get_first_frame(self) -> int:
+        return sorted(self._base_annotation.keys())[0]
 
 def split_annotations(json_mini: str):
     with open(json_mini, "r") as json_file:

@@ -31,5 +31,4 @@ class FastPtsGenerator(PtsGenerator):
         # Convert keypoints to Point objects and adjust coordinates relative to the full image
         points = [[kp.pt[0] + x, kp.pt[1] + y] for kp in keypoints]
         points = np.array(points, dtype=np.float32)
-        print(f"{points=}")
         return PointsArray(points)

@@ -125,6 +125,11 @@ class MFScaler(Scaler):
             mark.style.color = color
             self._key_point_marker.add(mark)
     
+    def _state_update(self, image:np.ndarray):
+        self._update_debug_windows(image)
+        self._prev_image = image
+        return None
+    
     def update(self, image: np.ndarray, current_box:BoundingBox):
         if not self._inited:
             raise NotInited(f"Must be inited first")
@@ -133,26 +138,25 @@ class MFScaler(Scaler):
         previous_pts = self._pts_gener.gen(current_box, image)
         if previous_pts is None or previous_pts.shape[0]==0:
             self._logger.warning(f"No points generated! {previous_pts}")
-            return None
+            return self._state_update(image)
         
         try:
             previous_pts, current_pts, backward_pts = self._flow_generator.get_flow(self._prev_image, current_image=image, previous_pts=previous_pts)
         except cv2.error as e:
             self._logger.warning(f"Cv2 error code {e.code}. Could not generate flow")
-            return None
+            return self._state_update(image)
         p0, p1 = self._filter(previous_pts, current_pts, backward_pts)
         
         if len(p0) < self._min_keypoint:
             self._logger.info("Not enought ponts! Returning none")
-            return None
+            return self._state_update(image)
         
         dx_scale, dy_scale = self._estimate_box_change(p0, p1, current_box)
         bb_new = self.form_new_box(current_box, dx_scale, dy_scale)
         
         crop_out_of_frame_box(bb_new, image.shape)
         
-        self._update_debug_windows(image)
-        self._prev_image = image
+        self._state_update(image)
         return bb_new
     
     def _update_debug_windows(self, image:np.ndarray):

@@ -7,11 +7,20 @@
     },
     "components": {
         "write_video": false,
-        "scale": true
+        "scale": true,
+        "visualisation": true
     },
     "annotation": {
         "process": true,
         "json": true
+    },
+    "json_annotation": {
+        "selected_obj": 0,
+        "run_all": false,
+        "selection": {
+            "object_selector": true,
+            "preselected": false
+        }
     },
     "corellation_tracker": {
         "math_parameters": {},
@@ -27,14 +36,14 @@
     },
     "median_flow_methods": {
         "scale_estimator": {
-            "scale_by_all_distances": false,
-            "estimate_by_affine": true
+            "scale_by_all_distances": true,
+            "estimate_by_affine": false
         },
         "points_generator": {
             "limit_by_ellipse": true,
             "algorithm": {
-                "fast_pts_generator": false,
-                "smart_grid_pts_generator": true,
+                "fast_pts_generator": true,
+                "smart_grid_pts_generator": false,
                 "shi_tomasi_generator": false
             }
         }

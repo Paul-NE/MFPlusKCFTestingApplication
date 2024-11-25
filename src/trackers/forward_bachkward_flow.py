@@ -30,7 +30,6 @@ class ForwardBachkwardFlow:
         Returns:
             _type_: _description_
         """
-        self._logger.info(f"{previous_pts=}")
         self._logger.info(f"{previous_image.shape=}")
         self._logger.info(f"{current_image.shape=}")
         
