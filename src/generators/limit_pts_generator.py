@@ -11,7 +11,7 @@ from geometry import BoundingBox, PointsArray, Point
 
 
 def _process_points(bb: BoundingBox, points:PointsArray, area_limitation:float=1.):
-    if points.size == 0:
+    if points is None or points.size == 0:
         return points
     x, y = points.x, points.y
     w, h = bb.width/2, bb.height/2

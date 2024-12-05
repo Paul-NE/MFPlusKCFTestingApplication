@@ -7,7 +7,7 @@ import cv2
 from marks.marks import *
 from analytic_tools.annotation_light import AnnotationLight
 from analytic_tools.annotation_json import AnnotationJson
-from analytic_tools.ious import IOUs
+from analytic_tools.ious import Analytics
 from trackers.scaler import Scaler
 from trackers.tracker import AdjustableTracker
 from trackers.errors import NotInited
@@ -134,6 +134,7 @@ class TrackerScaleManager:
         self._tracker = tracker
         self._scaler = scaler
         self._width_height_buffer: list[float, float]|None = None
+        self._previous_state: BoundingBox|None = None
         self._px_border = 5
     
     def _validate_annotation_box(self, message: VideoTest.Message, box: BoundingBox) -> bool:
@@ -212,11 +213,12 @@ class TrackerScaleManager:
             )
             scaler_result = self._scaler.update(message.image, annotation_old_scale)
             if scaler_result is None:
+                return self._previous_state, None
                 return None, None
             self._width_height_buffer = [scaler_result.width, scaler_result.height]
+            self._previous_state = scaler_result
             return scaler_result, annotation_old_scale
             
-            return None, None
         except NotInited:
             self._scaler.init(message.image, annotation)
             self._width_height_buffer = [annotation.width, annotation.height]
@@ -229,13 +231,14 @@ class TrackerScaleManager:
 
 
 class AnalyticsManager:
-    def __init__(self, analytics_engine:IOUs):
+    def __init__(self, analytics_engine:Analytics):
         self._analytics_engine = analytics_engine
-    
+    def set_limiting_frames(self, min_frame, max_frame):
+        invert_op = getattr(self._analytics_engine, "invert_op", None)
+        if callable(invert_op):
+            invert_op(self.path.parent_op)
     def update(self, tracker: BoundingBox|None, annotation: BoundingBox|None):
-        if tracker is None or annotation is None:
-            return
-        self._analytics_engine.iou_append(tracker, annotation)
+        self._analytics_engine.update(tracker, annotation)
 
 
 class MarkerManager:
@@ -273,7 +276,7 @@ class FrameProcessorUni:
             annotation:AnnotationLight|None=None, 
             video_writer:WebmVideoWriter|None=None, 
             windows_to_show:list[Window]|None=None,
-            analytics_engine: IOUs|None = None,
+            analytics_engine: Analytics|None = None,
             options:Options=None
             ) -> None:
         
@@ -363,7 +366,7 @@ class FrameProcessorUni:
             self._keep_running = False
         scaler_box, tracker_box = self._tracker.update(message, annotation_box)
         
-        if annotation_box and scaler_box: self._analytics_engine.iou_append(annotation_box, scaler_box)
+        self._analytics_engine.update(annotation_box, scaler_box)
         self._marker.add_box(annotation_box, (255, 0, 255))
         self._marker.add_box(scaler_box, (0, 255, 0))
         # self._marker.add_box(tracker_box)

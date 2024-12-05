@@ -12,7 +12,7 @@ from .pts_generator import PtsGenerator
 class FastPtsGenerator(PtsGenerator):
     def __init__(self):
         # Initialize the FAST feature detector once during instantiation
-        self.fast_detector = cv2.FastFeatureDetector_create()
+        self.fast_detector = cv2.FastFeatureDetector_create(threshold=10, nonmaxSuppression=True)
 
     def gen(self, bb: BoundingBox, image: np.ndarray) -> PointsArray:
         # Validate bounding box

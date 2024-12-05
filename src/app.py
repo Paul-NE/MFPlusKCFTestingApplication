@@ -6,14 +6,14 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 import pandas as pd
 
 from app_gui.object_selector import get_number
 from analytic_tools.nullable_annotation import NullableAnnotation
 from analytic_tools.annotation_light import AnnotationLight
 from analytic_tools.annotation_json import AnnotationJson, NoSuchObjectFound
-from analytic_tools.ious import IOUs
+from analytic_tools.ious import IOUs, Analytics
 from marks.marks import *
 import config
 
@@ -100,7 +100,7 @@ def _init_median_flow_scaler(config_options:dict) -> MFScaler:
     fb_filter = ForwardBackwardPntFilter(config._max_forward_backward_error)
     scale_estimator = _init_scale_estimation(config_options)
     
-    options =MFScaler.Options(debug_visualization=True) 
+    options =MFScaler.Options(**config_options["median_flow_options"]) 
     scaler = MFScaler(
         pts_gener,
         fb_filter,
@@ -157,7 +157,7 @@ def post_main(test_folder_path: Path, config_options: dict):
     annotation = init_annotation(annotation_path, config_options)
     
     video_writer = WebmVideoWriter(config._test_results_write_path) if config_options["components"]["write_video"] else None
-    _analytics_engine = IOUs()
+    _analytics_engine = Analytics()
     
     scaler = _init_median_flow_scaler(config_options)
     scaler_windows = scaler.get_debug_windows()
@@ -212,9 +212,63 @@ def post_main(test_folder_path: Path, config_options: dict):
     
     return _analytics_engine
 
+def write_or_append_to_excel(file_path, sheet_name, df):
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        # File doesn't exist, create a new file and write the DataFrame
+        df.to_excel(file_path, sheet_name=sheet_name, index=False)
+        print(f"Created new file '{file_path}' and added data to sheet '{sheet_name}'.")
+        return
+    
+    # File exists, load the workbook
+    book = load_workbook(file_path)
+
+    if sheet_name in book.sheetnames:
+        # Sheet exists, load the sheet into a DataFrame
+        existing_df = pd.read_excel(file_path, sheet_name=sheet_name)
+
+        # Check if the sheet is empty
+        if existing_df.empty:
+            # Write data with headers
+            with pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+                print(f"Sheet '{sheet_name}' was empty. Added new data with headers.")
+        else:
+            # Append data without rewriting headers
+            updated_df = pd.concat([existing_df, df], ignore_index=True)
+            with pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                updated_df.to_excel(writer, sheet_name=sheet_name, index=False)
+                print(f"Appended data to existing sheet '{sheet_name}'.")
+    else:
+        # Sheet doesn't exist, create it
+        with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            print(f"Added new sheet '{sheet_name}' to the file.")
+
 def main(test_folder_path: Path, config_options: dict):
-    columns = ["Video", "Obj_id", "IOU", "Samples"]
-    df = pd.DataFrame(columns=columns)
+    math_model_name = _init_scale_estimation(config_options).__name__
+    points_generator_name = type(_init_points_generator(config_options)).__name__
+    
+    columns = ["Video", "Obj_id", "IOU", "IOU_dispertion", "Samples", "map30", "map40", "map50", "map75"]
+    df = pd.DataFrame()
+    
+    none_data = {
+            "Video": None,
+            "Obj_id": None, 
+            "IOU": None,
+            "IOU_dispertion": None,
+            "Mean dS error": None,
+            "width_1": None,
+            "width_2": None,
+            "Succes samples": None,
+            "All samples": None,
+            "map30": None,
+            "map40": None,
+            "map50": None,
+            "map75": None,
+            "math_model": math_model_name,
+            "points_generator": points_generator_name
+        }
     # Process all annotated objects one by one untill get an error
     annotation_index = 0
     while config_options["json_annotation"]["run_all"]:
@@ -228,34 +282,48 @@ def main(test_folder_path: Path, config_options: dict):
         except NoSuchObjectFound as e:
             app_logger.info(f"Stopped on annotation number {options["json_annotation"]["selected_obj"]}.")
             break
-        data = {
-            "Video": test_folder_path,
-            "Obj_id": annotation_index, 
-            "IOU": result.avarage, 
-            "Samples": len(result)
-        }
+        
+        summary = result.summary()
+        if not summary:
+            data = none_data.copy()
+            data["Video"] = test_folder_path
+            data["Obj_id"] = annotation_index
+        else:
+            data = {
+                "Video": test_folder_path,
+                "Object id": annotation_index,
+                "IOU": summary.iou,
+                "IOU_dispertion": summary.iou_dispertion,
+                "Mean dS error": summary.ds_mean_error,
+                "width_1": summary.width_1,
+                "width_2": summary.width_2,
+                "Succes samples": summary.succes,
+                "All samples": summary.all_samples,
+                "map30": summary.map30,
+                "map40": summary.map40,
+                "map50": summary.map50,
+                "map75": summary.map75,
+                "math_model": math_model_name,
+                "points_generator": points_generator_name
+            }
         df = pd.concat([df, pd.DataFrame([data])], ignore_index=True)
+        print(df)
     else:
         post_main(test_folder_path, config_options)
     
-    print(df)
-    print(f"{df["Samples"].sum()=}")
+    if config_options["components"]["write_resulting_table"]:
+        write_or_append_to_excel("/home/poul/temp/test.xlsx", "test2", df)
 
 
 if __name__ == "__main__":
     params = load_json("./config_.json")
     
     main(Path(r"/home/poul/temp/Vids/annotated/New/rotate_street_vid_1"), params)
-    input()
     main(Path(r"/home/poul/temp/Vids/annotated/New/rotate_street_vid_2"), params)
-    input()
     main(Path(r"/home/poul/temp/Vids/annotated/New/Street_Vid_4"), params)
-    input()
     main(Path(r"/home/poul/temp/Vids/annotated/New/Street_Vid_5"), params)
-    input()
     main(Path(r"/home/poul/temp/Vids/annotated/New/StreetVid_1"), params)
-    input()
-    # main(Path(r"/home/poul/temp/Vids/annotated/New/StreetVid_2"), params)
+    main(Path(r"/home/poul/temp/Vids/annotated/New/StreetVid_2"), params)
     # input()
     
     os._exit(0)

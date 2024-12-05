@@ -68,35 +68,66 @@ def get_iou(bb1, bb2):
 class Analytics:
     @dataclass
     class Metrics:
-        iou:float
-        iou_dispertion:float
-        map30:float
-        map40:float
-        map50:float
-        map75:float
-        map80:float
-        map90:float
+        iou:float = None
+        iou_dispertion:float = None
+        map30:float = None
+        map40:float = None
+        map50:float = None
+        map75:float = None
+        map80:float = None
+        map90:float = None
+        succes:int = 0
+        all_samples:int = 0
+        ds_mean_error:float = None
+        width_1:float = None
+        width_2:float = None
         
     def __init__(self):
         self._box1: list[BoundingBox]=[]
         self._box2: list[BoundingBox]=[]
         self._ious: list[float]=[]
+        self._all_samples = 0
     
     def update(self, bbox1: BoundingBox, bbox2: BoundingBox):
+        self._all_samples += 1
         self._box1.append(bbox1)
         self._box2.append(bbox2)
+        if bbox1 is None or bbox2 is None:
+            self._ious.append(None)
+            return 
         self._ious.append(get_iou(list(bbox1), list(bbox2)))
     
-    def summary(self) -> Metrics:
+    def _get_ds(self) -> float:
+        boxes = [[box_1, box_2] for box_1, box_2 in zip(self._box1, self._box2) if (box_1 is not None and box_2 is not None)]
+        boxes_np = np.array(boxes)
+        if len(boxes_np.shape) < 2:
+            return
+        box_1, box_2 = boxes_np.swapaxes(1, 0)
+        ds1 = \
+            np.array([w.width for w in box_1[1:] if w is not None]) - \
+            np.array([w.width for w in box_1[:-1] if w is not None])
+        ds2 = \
+            np.array([w.width for w in box_2[1:] if w is not None]) - \
+            np.array([w.width for w in box_2[:-1] if w is not None])
+        return np.abs(np.abs(ds1) - np.abs(ds2)).mean()
+    
+    def summary(self) -> Metrics|None:
         summary = {}
-        np_iou = np.array(self._ious)
+        summary["ds_mean_error"] = self._get_ds()
+        summary["width_1"] = np.mean([w.width for w in self._box1 if w is not None])
+        summary["width_2"] = np.mean([w.width for w in self._box2 if w is not None])
+        summary["all_samples"] = self._all_samples
+        if not self._ious or all(v is None for v in self._ious):
+            return self.Metrics(**summary)
+        np_iou = np.array([v for v in self._ious if v is not None])
         summary["iou"] = np.average(np_iou)
         summary["iou_dispertion"] = tstd(np_iou)
         map_percent = [30, 40, 50, 75, 80, 90]
         for percent in map_percent:
             map = np_iou[np_iou > (percent/100)].shape[0] / np_iou.shape[0]
             summary[f"map{percent}"] = map
-        return summary
+        summary["succes"] = np_iou.shape[0]
+        return self.Metrics(**summary)
 
 class IOUs(list):
     def iou_append(self, bbox1: BoundingBox, bbox2: BoundingBox):

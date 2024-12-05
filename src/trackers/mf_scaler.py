@@ -72,11 +72,17 @@ class MFScaler(Scaler):
                 )
             )
     
-    def init(self, image:np.ndarray, box:BoundingBox):
+    def init(self, image:np.ndarray, box:BoundingBox) -> bool:
+        test_pts = self._pts_gener.gen(box, image)
+        if len(test_pts) <= self._min_keypoint*1.5:
+            self._logger.info("Not enought ponts to init! Skipping")
+            return False
+        
         self._prev_image = image
         if isinstance(box, list) or isinstance(box, tuple):
             box = BoundingBox.generate_from_list(box)
         self._inited = not self._inited
+        return True
     
     def _estimate_box_change(self, p0, p1, current_box: BoundingBox):
         ds = self._estimate_scale(p0, p1)
@@ -126,7 +132,8 @@ class MFScaler(Scaler):
             self._key_point_marker.add(mark)
     
     def _state_update(self, image:np.ndarray):
-        self._update_debug_windows(image)
+        if self._options.debug_visualization:
+            self._update_debug_windows(image)
         self._prev_image = image
         return None
     

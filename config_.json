@@ -8,7 +8,8 @@
     "components": {
         "write_video": false,
         "scale": true,
-        "visualisation": true
+        "visualisation": true,
+        "write_resulting_table": true
     },
     "annotation": {
         "process": true,
@@ -16,7 +17,7 @@
     },
     "json_annotation": {
         "selected_obj": 0,
-        "run_all": false,
+        "run_all": true,
         "selection": {
             "object_selector": true,
             "preselected": false
@@ -34,16 +35,19 @@
         "corellation": false,
         "annotation": true
     },
+    "median_flow_options":{
+        "debug_visualization": false
+    },
     "median_flow_methods": {
         "scale_estimator": {
             "scale_by_all_distances": true,
             "estimate_by_affine": false
         },
         "points_generator": {
-            "limit_by_ellipse": true,
+            "limit_by_ellipse": false,
             "algorithm": {
-                "fast_pts_generator": true,
-                "smart_grid_pts_generator": false,
+                "fast_pts_generator": false,
+                "smart_grid_pts_generator": true,
                 "shi_tomasi_generator": false
             }
         }

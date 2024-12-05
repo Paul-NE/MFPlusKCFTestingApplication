@@ -40,6 +40,8 @@ class ShiTomasiGenerator(PtsGenerator):
             return PointsArray(np.array([]))
             
         keypoints = self.shi_tomasi_detector(image=gray_roi)
+        if keypoints is None:
+            return
         points = [[point[0]+x, point[1]+y] for point in keypoints[::,0]]
         points = np.array(points, dtype=np.float32)
         points = PointsArray(points)
